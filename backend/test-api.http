@@ -1,0 +1,38 @@
+### 1. Signup API
+POST http://localhost:5000/api/v1/auth/signup
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "email": "test@shelterx.com",
+  "password": "password123"
+}
+
+### 2. Login API (Returns JWT Token)
+POST http://localhost:5000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@shelterx.com",
+  "password": "password123"
+}
+
+### 3. Run Thermal & Shelter Simulation API
+POST http://localhost:5000/api/v1/sih/simulate
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "location": "Ladakh",
+  "lat": 34.1526,
+  "lon": 77.5771,
+  "dimensions": {
+    "width": 5,
+    "length": 6,
+    "height": 3
+  },
+  "targetTemp": 20,
+  "orientation": "South-Facing",
+  "roofMaterial": "PUF Insulated Panels",
+  "wallThickness_mm": 150
+}
