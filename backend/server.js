@@ -18,6 +18,11 @@ app.use('/api/v1/sih', simulationRoutes);
 app.use('/api/v1/nist', nistRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Backend server active on port ${PORT}`);
-});
+
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`Backend server active on port ${PORT}`);
+    });
+}
+
+export default app;

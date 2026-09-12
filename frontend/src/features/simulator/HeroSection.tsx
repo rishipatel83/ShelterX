@@ -15,7 +15,7 @@ export default function HeroSection() {
       </h1>
 
       <p className="animate-fade-in-up-delay-2 max-w-3xl text-lg text-slate-500 font-medium leading-relaxed mb-10 z-10">
-        Developed for DRDO: Predicting inside temperature and thermal energy dynamics based on <span className="text-slate-800 font-semibold">Laddakh, Siachen, Leh</span>, and other extreme climate frontiers. This engine fuses live weather APIs with thermodynamic material science and ANSYS-backed structural analysis.
+        Developed for DRDO: Predicting inside temperature and thermal energy dynamics based on <span className="text-slate-800 font-semibold">Ladakh, Siachen, Leh</span>, and other extreme climate frontiers. This engine fuses live weather APIs with thermodynamic material science and ANSYS-backed structural analysis.
       </p>
 
     </div>
