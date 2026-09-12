@@ -13,6 +13,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        service: 'sih-backend',
+        uptime: process.uptime()
+    });
+});
+
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/sih', simulationRoutes);
 app.use('/api/v1/nist', nistRoutes);
