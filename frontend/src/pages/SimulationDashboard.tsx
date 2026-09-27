@@ -2,6 +2,7 @@ import HeroSection from '@/features/simulator/HeroSection';
 import StudioControls from '@/features/simulator/StudioControls';
 import ShelterSchematic from '@/features/simulator/ShelterSchematic';
 import ResultsPanel from '@/features/simulator/ResultsPanel';
+import VisualsPanel from '@/features/simulator/VisualsPanel';
 
 export default function SimulationDashboard() {
   return (
@@ -28,6 +29,12 @@ export default function SimulationDashboard() {
 
         {/* Results Panel */}
         <ResultsPanel />
+
+        {/* Divider */}
+        <div className="w-full h-px bg-slate-200 my-4"></div>
+
+        {/* Thermal Visualisation Studio — dynamic charts matching visuals/charts.py */}
+        <VisualsPanel />
 
       </div>
 

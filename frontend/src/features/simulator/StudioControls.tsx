@@ -1,8 +1,8 @@
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Crosshair, MapPin, Zap } from 'lucide-react';
+import { Crosshair, MapPin, Zap, DollarSign, Users, Layers } from 'lucide-react';
 import { useSimulationStore } from '@/store/useSimulationStore';
-import { useEffect } from 'react';
+import { useEffect, useRef, useMemo, useCallback } from 'react';
 import L from 'leaflet';
 
 // Fix leaflet marker icon issue
@@ -15,13 +15,23 @@ L.Icon.Default.mergeOptions({
 
 function MapController({ position, setPosition }: { position: [number, number], setPosition: (p: [number, number]) => void }) {
   const map = useMap();
+  const lastAnimatedPosRef = useRef<[number, number]>(position);
+
   useEffect(() => {
-    map.flyTo(position, 12, { animate: true, duration: 1.5 });
+    const [prevLat, prevLon] = lastAnimatedPosRef.current;
+    const [currLat, currLon] = position;
+    // Only fly if coordinates actually changed noticeably (avoid re-flying on slider updates or tiny deltas)
+    if (Math.abs(prevLat - currLat) > 0.0001 || Math.abs(prevLon - currLon) > 0.0001) {
+      lastAnimatedPosRef.current = position;
+      map.flyTo(position, 12, { animate: true, duration: 0.8 });
+    }
   }, [position, map]);
 
   useMapEvents({
     click(e) {
-      setPosition([e.latlng.lat, e.latlng.lng]);
+      const newPos: [number, number] = [e.latlng.lat, e.latlng.lng];
+      lastAnimatedPosRef.current = newPos;
+      setPosition(newPos);
     },
   });
   return null;
@@ -29,12 +39,15 @@ function MapController({ position, setPosition }: { position: [number, number], 
 
 export default function StudioControls() {
   const { draftParams, setDraftParam, setLocationPreset, fetchSimulation } = useSimulationStore();
-  const position: [number, number] = [draftParams.lat, draftParams.lon];
+  const position = useMemo<[number, number]>(
+    () => [draftParams.lat, draftParams.lon],
+    [draftParams.lat, draftParams.lon]
+  );
 
-  const handleSetPosition = (p: [number, number]) => {
+  const handleSetPosition = useCallback((p: [number, number]) => {
     setDraftParam('lat', parseFloat(p[0].toFixed(6)));
     setDraftParam('lon', parseFloat(p[1].toFixed(6)));
-  };
+  }, [setDraftParam]);
 
   const handleFetchLocation = () => {
     if ('geolocation' in navigator) {
@@ -56,7 +69,7 @@ export default function StudioControls() {
             <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-3 block">Preset Environments</label>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'laddakh', name: 'Laddakh', subtitle: '-15°C night', icon: '🏔️' },
+                { id: 'ladakh', name: 'Ladakh', subtitle: '-15°C night', icon: '🏔️' },
                 { id: 'siachen', name: 'Siachen', subtitle: 'Glacier -30°C', icon: '❄️' },
                 { id: 'dras', name: 'Dras', subtitle: 'Coldest town', icon: '🥶' },
                 { id: 'leh', name: 'Leh', subtitle: 'Alpine plateau', icon: '⛺' }
@@ -181,8 +194,63 @@ export default function StudioControls() {
         </div>
       </div>
 
+      {/* Advanced Parameters (Backend Schema v2.0.0 Optional Fields) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-6 border-t border-slate-100">
+        <div>
+          <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase flex items-center mb-2">
+            <DollarSign className="w-3 h-3 mr-1.5 text-rose-500" /> Budget (INR)
+          </label>
+          <input
+            type="number"
+            placeholder="e.g. 50000"
+            value={draftParams.budgetINR ?? ''}
+            onChange={(e) => setDraftParam('budgetINR', e.target.value ? parseFloat(e.target.value) : undefined as any)}
+            className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-rose-100 outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase flex items-center mb-2">
+            <Users className="w-3 h-3 mr-1.5 text-blue-500" /> Occupants
+          </label>
+          <input
+            type="number"
+            min={1} max={50}
+            placeholder="e.g. 4"
+            value={draftParams.occupants ?? ''}
+            onChange={(e) => setDraftParam('occupants', e.target.value ? parseInt(e.target.value) : undefined as any)}
+            className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-100 outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase flex items-center mb-2">
+            <Layers className="w-3 h-3 mr-1.5 text-indigo-500" /> Insulation (mm)
+          </label>
+          <input
+            type="number"
+            min={10} max={300}
+            placeholder="e.g. 50"
+            value={draftParams.insulationThickness_mm ?? ''}
+            onChange={(e) => setDraftParam('insulationThickness_mm', e.target.value ? parseFloat(e.target.value) : undefined as any)}
+            className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-100 outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-2 block">Optimize Priority</label>
+          <select
+            value={draftParams.priority ?? ''}
+            onChange={(e) => setDraftParam('priority', e.target.value || undefined as any)}
+            className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100"
+          >
+            <option value="">Balanced (Default)</option>
+            <option value="thermal">Thermal Performance</option>
+            <option value="cost">Cost-Effective</option>
+            <option value="durability">Durability</option>
+          </select>
+        </div>
+      </div>
+
       {/* Execute Button */}
-      <div className="pt-8 border-t border-slate-100 flex justify-center">
+      <div className="pt-8 border-t border-slate-100 flex flex-col items-center gap-3">
         <button 
           onClick={fetchSimulation}
           className="group flex items-center justify-center space-x-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl px-12 py-4 transition-all shadow-[0_8px_30px_rgba(15,23,42,0.15)] border border-slate-800 w-full md:w-auto min-w-[300px]"
@@ -192,6 +260,10 @@ export default function StudioControls() {
           </div>
           <span className="font-bold tracking-wide uppercase text-sm">Execute Simulation</span>
         </button>
+        <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+          Dynamic Schema v2.0.0 · Open-Meteo Live Weather
+        </p>
       </div>
 
     </div>

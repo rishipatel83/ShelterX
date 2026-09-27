@@ -1,0 +1,135 @@
+{
+  "version": "1.1.0",
+  "description": "ShelterX production frontend-to-backend input contract for validated conduction V1.",
+  "endpoint": "/api/v1/sih/simulate",
+  "payload": {
+    "location": {
+      "type": "string",
+      "required": true,
+      "minLength": 1,
+      "maxLength": 160,
+      "source": "frontend"
+    },
+    "lat": {
+      "type": "number",
+      "required": true,
+      "min": -90,
+      "max": 90,
+      "source": "frontend"
+    },
+    "lon": {
+      "type": "number",
+      "required": true,
+      "min": -180,
+      "max": 180,
+      "source": "frontend"
+    },
+    "dimensions": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "length": {
+          "type": "number",
+          "required": true,
+          "exclusiveMin": 0,
+          "source": "frontend"
+        },
+        "width": {
+          "type": "number",
+          "required": true,
+          "exclusiveMin": 0,
+          "source": "frontend"
+        },
+        "height": {
+          "type": "number",
+          "required": true,
+          "exclusiveMin": 0,
+          "source": "frontend"
+        }
+      }
+    },
+    "targetTemp": {
+      "type": "number",
+      "required": true,
+      "source": "frontend"
+    },
+    "materialCode": {
+      "type": "string",
+      "required": true,
+      "minLength": 1,
+      "maxLength": 120,
+      "source": "frontend_material_selection"
+    },
+    "wallThickness_mm": {
+      "type": "number",
+      "required": true,
+      "exclusiveMin": 0,
+      "source": "frontend"
+    },
+    "insulationThickness_mm": {
+      "type": "number",
+      "required": true,
+      "exclusiveMin": 0,
+      "source": "frontend"
+    },
+    "orientation": {
+      "type": "string",
+      "required": false,
+      "maxLength": 80,
+      "source": "frontend_future_v2"
+    },
+    "roofMaterial": {
+      "type": "string",
+      "required": false,
+      "maxLength": 160,
+      "source": "deprecated_frontend_compatibility"
+    },
+    "occupants": {
+      "type": "integer",
+      "required": false,
+      "min": 0,
+      "source": "frontend_future_v2"
+    },
+    "budgetINR": {
+      "type": "number",
+      "required": false,
+      "min": 0,
+      "source": "frontend"
+    },
+    "materialSelectionMode": {
+      "type": "string",
+      "required": false,
+      "maxLength": 80,
+      "source": "frontend"
+    },
+    "priority": {
+      "type": "string",
+      "required": false,
+      "maxLength": 80,
+      "source": "frontend"
+    },
+    "costSurfaceType": {
+      "type": "string",
+      "required": false,
+      "enum": ["walls", "roof", "floor", "walls_and_roof", "full_envelope"],
+      "source": "frontend_or_design_engine"
+    },
+    "materialId": {
+      "type": "string",
+      "required": false,
+      "maxLength": 120,
+      "source": "legacy_or_internal"
+    }
+  },
+  "productionThermalScope": {
+    "included": ["wall_conduction", "roof_conduction"],
+    "validatedBy": "ANSYS conduction cases",
+    "futureExperimental": [
+      "wind_convection",
+      "solar_gain",
+      "occupant_heat",
+      "infiltration",
+      "thermal_mass"
+    ]
+  }
+}

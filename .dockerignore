@@ -1,0 +1,12 @@
+node_modules
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.log
+*.err
+*.out
+__pycache__
+coverage
+research

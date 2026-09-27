@@ -1,0 +1,6 @@
+{
+  "version": "0.0.0",
+  "status": "awaiting-user-dataset",
+  "description": "Replace with the user's validated material/ANSYS dataset. No placeholder material values are supplied.",
+  "materials": []
+}

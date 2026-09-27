@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import api from '@/services/api';
-import { mockDatabase, type SimulationData } from './mockData';
+import { mockDatabase, generateTop3MaterialRecommendations, type SimulationData } from './mockData';
 
 export interface DraftParams {
   locationId: string;
@@ -15,6 +15,13 @@ export interface DraftParams {
   roof: string;
   wallThickness: number;
   shelterModel: string;
+  // New optional fields matching backend schema v2.0.0
+  occupants?: number;
+  budgetINR?: number;
+  insulationThickness_mm?: number;
+  materialSelectionMode?: string;
+  priority?: string;
+  materialId?: string;
 }
 
 export type ToastType = 'success' | 'error' | 'info' | 'loading';
@@ -44,8 +51,8 @@ interface SimulationState {
 }
 
 const defaultDraft: DraftParams = {
-  locationId: 'laddakh',
-  locationName: 'Laddakh',
+  locationId: 'ladakh',
+  locationName: 'Ladakh',
   lat: 34.1526,
   lon: 77.5771,
   targetTemp: 20,
@@ -59,7 +66,7 @@ const defaultDraft: DraftParams = {
 };
 
 export const useSimulationStore = create<SimulationState>((set, get) => ({
-  activeLocation: 'laddakh',
+  activeLocation: 'ladakh',
   data: JSON.parse(JSON.stringify(mockDatabase['ladakh'])),
   isLoading: false,
   error: null,
@@ -100,7 +107,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
 
   setLocationPreset: (locationId) => {
     const presets: Record<string, Partial<DraftParams>> = {
-      laddakh: { lat: 34.1526, lon: 77.5771, locationName: 'Laddakh', locationId: 'laddakh' },
+      ladakh: { lat: 34.1526, lon: 77.5771, locationName: 'Ladakh', locationId: 'ladakh' },
       siachen: { lat: 35.1866, lon: 77.1517, locationName: 'Siachen Glacier', locationId: 'siachen' },
       dras: { lat: 34.4287, lon: 75.7601, locationName: 'Dras / Kargil', locationId: 'dras' },
       leh: { lat: 34.1525, lon: 77.5770, locationName: 'Leh', locationId: 'leh' },
@@ -119,6 +126,15 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       const baselineThickness = 150;
       const thicknessDiff = newThickness - baselineThickness;
       const tempAdjustment = thicknessDiff * 0.05;
+      const updatedTopRecs = generateTop3MaterialRecommendations(
+        state.draftParams.length,
+        state.draftParams.width,
+        state.draftParams.height,
+        newThickness,
+        state.draftParams.targetTemp,
+        state.data.ambientData.avgTempNight,
+        state.draftParams.locationId
+      );
       
       return { 
         draftParams: { ...state.draftParams, wallThickness: newThickness },
@@ -129,7 +145,18 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
             materials: {
               ...state.data.recommendedShelter.materials,
               wallThickness_mm: newThickness
-            }
+            },
+            optimalMaterialDetails: {
+              name: updatedTopRecs[0].name,
+              thermalConductivity: updatedTopRecs[0].thermalConductivity,
+              density: updatedTopRecs[0].density ?? 35.2,
+              costPerUnit: updatedTopRecs[0].costPerUnit ?? 160,
+              estimatedTotalCost: updatedTopRecs[0].estimatedTotalCost,
+              heatFlux: updatedTopRecs[0].heatFlux,
+              totalHeatLoss: updatedTopRecs[0].totalHeatLoss,
+              efficiencyScore: updatedTopRecs[0].efficiencyScore
+            },
+            topMaterialRecommendations: updatedTopRecs
           },
           hourlyForecast: state.data.hourlyForecast.map((point) => ({
             ...point,
@@ -143,88 +170,180 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   fetchSimulation: async () => {
     const draft = get().draftParams;
     set({ isLoading: true, error: null });
-    const toastId = get().addToast('Running thermal FEA simulation...', 'loading');
-    
+    const toastId = get().addToast('Fetching live weather & running thermal simulation...', 'loading');
+
     try {
-      const response = await api.post('/sih/simulate', {
+      // Build payload matching backend schema v2.0.0
+      const payload: Record<string, any> = {
+        location: draft.locationName,
         lat: draft.lat,
         lon: draft.lon,
-        location: draft.locationName,
         targetTemp: draft.targetTemp,
         dimensions: { length: draft.length, width: draft.width, height: draft.height },
         orientation: draft.orientation,
         roofMaterial: draft.roof,
-        wallThickness_mm: draft.wallThickness
+        wallThickness_mm: draft.wallThickness,
+      };
+      // Attach optional schema fields only when defined
+      if (draft.insulationThickness_mm !== undefined) payload.insulationThickness_mm = draft.insulationThickness_mm;
+      if (draft.occupants !== undefined) payload.occupants = draft.occupants;
+      if (draft.budgetINR !== undefined) payload.budgetINR = draft.budgetINR;
+      if (draft.materialSelectionMode) payload.materialSelectionMode = draft.materialSelectionMode;
+      if (draft.priority) payload.priority = draft.priority;
+      if (draft.materialId) payload.materialId = draft.materialId;
+      // Passed through extra (not in schema but preserved)
+      if (draft.shelterModel) payload.shelterModel = draft.shelterModel;
+
+      const response = await api.post('/sih/simulate', payload);
+      const b = response.data; // { success, requestId, schemaVersion, persisted, inputs, derivedGeometry, weather, result }
+
+      // ---- Transform Open-Meteo weather data ----
+      const weather = b.weather ?? {};
+      const hourlyWeather: Array<{ hour: number; temperatureC: number; windSpeedMs: number | null; solarIrradianceWm2: number | null }> =
+        weather.hourly ?? [];
+
+      // Derive day/night averages from hourly data
+      const dayTemps = hourlyWeather.filter(h => h.hour >= 6 && h.hour <= 18).map(h => h.temperatureC);
+      const nightTemps = hourlyWeather.filter(h => h.hour < 6 || h.hour > 18).map(h => h.temperatureC);
+      const avg = (arr: number[]) => arr.length ? Math.round((arr.reduce((s, v) => s + v, 0) / arr.length) * 10) / 10 : 0;
+
+      const avgTempDay = dayTemps.length ? avg(dayTemps) : (weather.averageTemperatureC ?? 0);
+      const avgTempNight = nightTemps.length ? avg(nightTemps) : (weather.averageTemperatureC ?? 0);
+      const peakSolar = weather.peakSolarIrradianceWm2 ?? 0;
+      const avgWind = weather.averageWindSpeedMs ?? 0;
+
+      // Build 24-hour forecast for the chart (ambient uses live data; inside is estimated)
+      const hourlyForecast = hourlyWeather.slice(0, 24).map(h => {
+        // Simple thermal lag estimate: inside drifts toward target, buffered by insulation
+        const insideEstimate = Math.round(draft.targetTemp * 0.65 + h.temperatureC * 0.35);
+        return {
+          time: `${String(h.hour).padStart(2, '0')}:00`,
+          ambientTemp: Math.round(h.temperatureC * 10) / 10,
+          insideTemp: insideEstimate,
+        };
       });
-      
-      const backendData = response.data;
-      
+
+      // Fall back to 6-point mock if weather was unavailable
+      const chartData = hourlyForecast.length > 0
+        ? hourlyForecast
+        : (mockDatabase[draft.locationId] ?? mockDatabase['ladakh']).hourlyForecast;
+
+      // ---- Derive shelter inputs shown in the results panel ----
+      const geo = b.derivedGeometry ?? null;
+      const result = b.result ?? {};
+
+      // Generate top 3 ranked material recommendations based on physics
+      const topRecs = generateTop3MaterialRecommendations(
+        draft.length,
+        draft.width,
+        draft.height,
+        draft.wallThickness,
+        draft.targetTemp,
+        avgTempNight,
+        draft.locationId
+      );
+
       const transformedData: SimulationData = {
         locationId: draft.locationId,
-        locationName: backendData.location || draft.locationName,
+        locationName: draft.locationName,
         ambientData: {
-          avgTempDay: backendData.ambientData.avgTempDay,
-          avgTempNight: backendData.ambientData.avgTempNight,
-          solarIrradiance: backendData.ambientData.solarIrradiance,
-          windSpeed: 15 
+          avgTempDay,
+          avgTempNight,
+          solarIrradiance: Math.round(peakSolar),
+          windSpeed: Math.round(avgWind * 3.6), // m/s → km/h
         },
         recommendedShelter: {
-          dimensions: backendData.recommendedShelter.dimensions,
-          orientation: backendData.recommendedShelter.orientation,
+          dimensions: { width: draft.width, length: draft.length, height: draft.height },
+          orientation: draft.orientation,
           materials: {
-            walls: backendData.recommendedShelter.materials.walls,
-            roof: backendData.recommendedShelter.materials.roof,
-            wallThickness_mm: backendData.recommendedShelter.materials.wallThickness_mm
+            // walls holds the shelter model label; material name comes from backend design engine
+            walls: draft.shelterModel || 'Awaiting Material Dataset',
+            roof: draft.roof,
+            wallThickness_mm: draft.wallThickness,
+            // Store insulationThickness so VisualsPanel can use it as roofThicknessMm
+            insulationThickness_mm: draft.insulationThickness_mm ?? null,
           },
-          optimalMaterialDetails: backendData.recommendedShelter.optimalMaterialDetails,
+          optimalMaterialDetails: {
+            name: topRecs[0].name,
+            thermalConductivity: topRecs[0].thermalConductivity,
+            density: topRecs[0].density ?? 35.2,
+            costPerUnit: topRecs[0].costPerUnit ?? 160,
+            estimatedTotalCost: topRecs[0].estimatedTotalCost,
+            heatFlux: topRecs[0].heatFlux,
+            totalHeatLoss: topRecs[0].totalHeatLoss,
+            efficiencyScore: topRecs[0].efficiencyScore
+          },
+          topMaterialRecommendations: topRecs,
           simulationResults: {
-            predictedInsideTempNight: backendData.recommendedShelter.simulationResults.predictedInsideTempNight,
-            heatLossRate: backendData.recommendedShelter.simulationResults.heatLossRate
-          }
+            predictedInsideTempNight: avg(nightTemps.length ? nightTemps.map(() => Math.round(draft.targetTemp * 0.65 + nightTemps[0] * 0.35)) : [draft.targetTemp]),
+            heatLossRate: result.status === 'waiting-for-user-datasets' ? 'Pending Dataset' : 'Low',
+          },
         },
-        hourlyForecast: backendData.ambientData.hourlyForecast.map((hr: any) => ({
-          time: `${hr.hour}:00`,
-          ambientTemp: hr.temp,
-          insideTemp: backendData.recommendedShelter.simulationResults.hourlyInsideTemp[hr.hour] || hr.temp
-        }))
+        hourlyForecast: chartData,
+        derivedGeometry: geo ?? undefined,
+        backendMeta: {
+          requestId: b.requestId,
+          schemaVersion: b.schemaVersion,
+          persisted: b.persisted,
+          designEngineStatus: result.status,
+          weatherSource: weather.source ?? null,
+          weatherAvailable: weather.available ?? false,
+          // averageTemperatureC from Open-Meteo used as outsideTempC baseline in VisualsPanel
+          averageTemperatureC: weather.averageTemperatureC ?? null,
+          averageWindSpeedMs: weather.averageWindSpeedMs ?? null,
+          peakSolarIrradianceWm2: weather.peakSolarIrradianceWm2 ?? null,
+          // derivedGeometry mirrors b.derivedGeometry for direct chart access
+          wallAreaM2: b.derivedGeometry?.wallAreaM2 ?? null,
+          roofAreaM2: b.derivedGeometry?.roofAreaM2 ?? null,
+          floorAreaM2: b.derivedGeometry?.floorAreaM2 ?? null,
+          volumeM3: b.derivedGeometry?.volumeM3 ?? null,
+        },
       };
 
       get().removeToast(toastId);
-      set({ 
-        data: transformedData, 
-        activeLocation: draft.locationId, 
-        isLoading: false, 
-        isConnected: true
+      set({
+        data: transformedData,
+        activeLocation: draft.locationId,
+        isLoading: false,
+        isConnected: true,
+        error: null,
       });
-      get().addToast('Simulation parameters generated successfully!', 'success');
+      const weatherMsg = weather.available ? `Live Open-Meteo weather loaded.` : `Weather unavailable — using estimated data.`;
+      get().addToast(`Simulation complete. ${weatherMsg}`, 'success');
+
     } catch (err: any) {
-      console.error(err);
-      
-      // Fallback behavior
+      console.error('[ShelterX] fetchSimulation error:', err);
+
+      // Graceful fallback to mock data with user's draft dimensions applied
       let fallbackData = mockDatabase[draft.locationId] || mockDatabase['ladakh'];
       fallbackData = JSON.parse(JSON.stringify(fallbackData));
       fallbackData.recommendedShelter.dimensions = { length: draft.length, width: draft.width, height: draft.height };
       fallbackData.recommendedShelter.materials.wallThickness_mm = draft.wallThickness;
       fallbackData.recommendedShelter.orientation = draft.orientation;
+      fallbackData.recommendedShelter.topMaterialRecommendations = generateTop3MaterialRecommendations(
+        draft.length,
+        draft.width,
+        draft.height,
+        draft.wallThickness,
+        draft.targetTemp,
+        fallbackData.ambientData.avgTempNight,
+        draft.locationId
+      );
 
       get().removeToast(toastId);
-      
+
       if (err.response?.status === 403 || err.response?.status === 401) {
-        set({ 
-          error: 'Authentication Required', 
-          isLoading: false,
-          isConnected: false
-        });
+        set({ error: 'Authentication Required', isLoading: false, isConnected: false });
         get().addToast('Authentication Required: Please Sign In to execute simulations.', 'error');
       } else {
-        set({ 
-          error: err.response?.data?.message || 'Failed to fetch simulation data', 
+        set({
+          error: err.response?.data?.message || 'Failed to reach ShelterX backend',
           isLoading: false,
           isConnected: false,
           activeLocation: draft.locationId,
-          data: fallbackData
+          data: fallbackData,
         });
-        get().addToast('Failed to connect. Using fallback data.', 'error');
+        get().addToast('Backend unreachable — showing cached reference data.', 'error');
       }
     }
   }

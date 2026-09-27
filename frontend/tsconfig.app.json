@@ -8,11 +8,9 @@
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
-    /* options added by us*/
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
+    /* Paths */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
 
     /* Bundler mode */

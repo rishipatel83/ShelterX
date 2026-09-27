@@ -1,0 +1,87 @@
+{
+  "version": "2.0.0",
+  "description": "Dynamic ShelterX input contract. No project-specific values are hardcoded in the backend.",
+  "endpoint": "/api/v1/sih/simulate",
+  "fields": [
+    {
+      "path": "location",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "lat",
+      "type": "number",
+      "required": true
+    },
+    {
+      "path": "lon",
+      "type": "number",
+      "required": true
+    },
+    {
+      "path": "dimensions.length",
+      "type": "number",
+      "required": true
+    },
+    {
+      "path": "dimensions.width",
+      "type": "number",
+      "required": true
+    },
+    {
+      "path": "dimensions.height",
+      "type": "number",
+      "required": true
+    },
+    {
+      "path": "targetTemp",
+      "type": "number",
+      "required": true
+    },
+    {
+      "path": "orientation",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "roofMaterial",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "wallThickness_mm",
+      "type": "number",
+      "required": false
+    },
+    {
+      "path": "insulationThickness_mm",
+      "type": "number",
+      "required": false
+    },
+    {
+      "path": "occupants",
+      "type": "integer",
+      "required": false
+    },
+    {
+      "path": "budgetINR",
+      "type": "number",
+      "required": false
+    },
+    {
+      "path": "materialSelectionMode",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "priority",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "materialId",
+      "type": "string",
+      "required": false
+    }
+  ]
+}

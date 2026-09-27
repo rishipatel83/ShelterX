@@ -1,5 +1,25 @@
 // src/store/mockData.ts
 
+export type TopMaterialRecommendation = {
+  name: string;
+  recommendationType?: string;
+  tagline?: string;
+  badgeColor?: string;
+  thermalConductivity: number;
+  density?: number;
+  costPerUnit?: number;
+  estimatedTotalCost: number;
+  heatFlux: number;
+  totalHeatLoss: number;
+  efficiencyScore: number;
+  simulationResults?: {
+    hourlyInsideTemp?: number[];
+    predictedInsideTempNight: number;
+    predictedInsideTempDay?: number;
+    heatLossRate?: string;
+  };
+};
+
 export type SimulationData = {
   locationId: string;
   locationName: string;
@@ -16,6 +36,7 @@ export type SimulationData = {
       walls: string;
       roof: string;
       wallThickness_mm: number;
+      insulationThickness_mm?: number | null;
     };
     optimalMaterialDetails?: {
       name: string;
@@ -27,12 +48,200 @@ export type SimulationData = {
       totalHeatLoss: number;
       efficiencyScore: number;
     };
+    topMaterialRecommendations?: TopMaterialRecommendation[];
     simulationResults: {
       predictedInsideTempNight: number;
       heatLossRate: string;
     };
   };
   hourlyForecast: Array<{ time: string; ambientTemp: number; insideTemp: number }>;
+  /** Derived geometry calculated by backend geometryService */
+  derivedGeometry?: {
+    wallAreaM2: number;
+    roofAreaM2: number;
+    floorAreaM2: number;
+    volumeM3: number;
+  };
+  /** Metadata about the backend response */
+  backendMeta?: {
+    requestId?: string;
+    schemaVersion?: string;
+    persisted?: boolean;
+    designEngineStatus?: string;
+    weatherSource?: string | null;
+    weatherAvailable?: boolean;
+    averageTemperatureC?: number | null;
+    averageWindSpeedMs?: number | null;
+    peakSolarIrradianceWm2?: number | null;
+    wallAreaM2?: number | null;
+    roofAreaM2?: number | null;
+    floorAreaM2?: number | null;
+    volumeM3?: number | null;
+  };
+};
+
+/**
+ * Calculates top 3 ranked material recommendations based on physics,
+ * habitat dimensions, wall thickness, and climate profile.
+ */
+export const generateTop3MaterialRecommendations = (
+  length: number = 5,
+  width: number = 4,
+  height: number = 2.8,
+  wallThickness_mm: number = 150,
+  targetTemp: number = 20,
+  ambientNightTemp: number = -15,
+  locationId: string = 'ladakh'
+): TopMaterialRecommendation[] => {
+  const wallArea = 2 * (length * height + width * height);
+  const roofArea = length * width;
+  const totalArea = wallArea + roofArea;
+  const thickness_m = Math.max((wallThickness_mm || 150) / 1000, 0.05);
+  const deltaT = Math.max(Math.abs(targetTemp - ambientNightTemp), 1);
+
+  const isHotClimate = locationId === 'thar' || ambientNightTemp > 18;
+
+  if (isHotClimate) {
+    // Hot & Arid Climate Candidates
+    const k1 = 0.09; // AAC
+    const flux1 = Number(((k1 / thickness_m) * deltaT).toFixed(1));
+    const loss1 = Math.round(flux1 * totalArea);
+
+    const k2 = 0.032; // PCM
+    const flux2 = Number(((k2 / thickness_m) * deltaT).toFixed(1));
+    const loss2 = Math.round(flux2 * totalArea);
+
+    const k3 = 0.036; // XPS
+    const flux3 = Number(((k3 / thickness_m) * deltaT).toFixed(1));
+    const loss3 = Math.round(flux3 * totalArea);
+
+    return [
+      {
+        name: 'Autoclaved Aerated Concrete (AAC) + Cool-Roof Coating',
+        recommendationType: 'Optimal Balance',
+        tagline: 'High Thermal Inertia: Buffers extreme desert daytime solar spikes',
+        badgeColor: 'emerald',
+        thermalConductivity: k1,
+        density: 450,
+        costPerUnit: 140,
+        estimatedTotalCost: Math.round(totalArea * 290),
+        heatFlux: flux1,
+        totalHeatLoss: loss1,
+        efficiencyScore: 79.4,
+        simulationResults: {
+          predictedInsideTempNight: Math.round(targetTemp - deltaT * 0.22),
+          predictedInsideTempDay: 26,
+          heatLossRate: 'Controlled Heat Inertia'
+        }
+      },
+      {
+        name: 'Phase Change Material (PCM) Ventilated Double-Skin',
+        recommendationType: 'Max Heat Rejection',
+        tagline: 'Active Latent Heat Storage: Absorbs daytime peak radiation',
+        badgeColor: 'blue',
+        thermalConductivity: k2,
+        density: 220,
+        costPerUnit: 260,
+        estimatedTotalCost: Math.round(totalArea * 480),
+        heatFlux: flux2,
+        totalHeatLoss: loss2,
+        efficiencyScore: 91.2,
+        simulationResults: {
+          predictedInsideTempNight: Math.round(targetTemp - deltaT * 0.12),
+          predictedInsideTempDay: 23,
+          heatLossRate: 'Superior Rejection'
+        }
+      },
+      {
+        name: 'Extruded Polystyrene (XPS) Lightweight Stucco',
+        recommendationType: 'Budget Friendly',
+        tagline: 'Low-cost rapid construction with reliable moisture & heat resistance',
+        badgeColor: 'amber',
+        thermalConductivity: k3,
+        density: 130,
+        costPerUnit: 90,
+        estimatedTotalCost: Math.round(totalArea * 185),
+        heatFlux: flux3,
+        totalHeatLoss: loss3,
+        efficiencyScore: 63.5,
+        simulationResults: {
+          predictedInsideTempNight: Math.round(targetTemp - deltaT * 0.35),
+          predictedInsideTempDay: 29,
+          heatLossRate: 'Moderate Protection'
+        }
+      }
+    ];
+  }
+
+  // Extreme Sub-Zero & High-Altitude Cold Climates (e.g. Ladakh, Tawang)
+  const k1 = 0.026; // Polyurethane Foam (PUF) Composite
+  const flux1 = Number(((k1 / thickness_m) * deltaT).toFixed(1));
+  const loss1 = Math.round(flux1 * totalArea);
+
+  const k2 = 0.016; // Aerogel Vacuum Insulated Panel
+  const flux2 = Number(((k2 / thickness_m) * deltaT).toFixed(1));
+  const loss2 = Math.round(flux2 * totalArea);
+
+  const k3 = 0.040; // High-Density Rockwool Core
+  const flux3 = Number(((k3 / thickness_m) * deltaT).toFixed(1));
+  const loss3 = Math.round(flux3 * totalArea);
+
+  return [
+    {
+      name: 'NIST: Polyurethane Foam (PUF) Composite',
+      recommendationType: 'Optimal Balance',
+      tagline: 'High Thermal Retention & Economical Life-Cycle Deployment',
+      badgeColor: 'emerald',
+      thermalConductivity: k1,
+      density: 35.2,
+      costPerUnit: 160,
+      estimatedTotalCost: Math.round(totalArea * 310),
+      heatFlux: flux1,
+      totalHeatLoss: loss1,
+      efficiencyScore: 82.5,
+      simulationResults: {
+        predictedInsideTempNight: Math.round(targetTemp - deltaT * 0.24),
+        predictedInsideTempDay: targetTemp,
+        heatLossRate: 'Low Heat Loss'
+      }
+    },
+    {
+      name: 'Aerogel Vacuum Insulated Panel (VIP)',
+      recommendationType: 'Max Insulation',
+      tagline: 'Ultra-Low Heat Flux: Engineered for severe Himalayan sub-zero nights',
+      badgeColor: 'blue',
+      thermalConductivity: k2,
+      density: 140.0,
+      costPerUnit: 310,
+      estimatedTotalCost: Math.round(totalArea * 560),
+      heatFlux: flux2,
+      totalHeatLoss: loss2,
+      efficiencyScore: 94.8,
+      simulationResults: {
+        predictedInsideTempNight: Math.round(targetTemp - deltaT * 0.12),
+        predictedInsideTempDay: targetTemp,
+        heatLossRate: 'Minimal Heat Loss'
+      }
+    },
+    {
+      name: 'High-Density Rockwool Core Sandwich',
+      recommendationType: 'Budget Friendly',
+      tagline: 'Cost-Effective, Non-Combustible Fast-Assembly Modular Panel',
+      badgeColor: 'amber',
+      thermalConductivity: k3,
+      density: 110.0,
+      costPerUnit: 95,
+      estimatedTotalCost: Math.round(totalArea * 180),
+      heatFlux: flux3,
+      totalHeatLoss: loss3,
+      efficiencyScore: 66.4,
+      simulationResults: {
+        predictedInsideTempNight: Math.round(targetTemp - deltaT * 0.38),
+        predictedInsideTempDay: targetTemp - 2,
+        heatLossRate: 'Standard Retention'
+      }
+    }
+  ];
 };
 
 export const mockDatabase: Record<string, SimulationData> = {
@@ -46,17 +255,17 @@ export const mockDatabase: Record<string, SimulationData> = {
       materials: { walls: 'Composite Phase Change Material (PCM)', roof: 'PUF Insulated Panels', wallThickness_mm: 150 },
       optimalMaterialDetails: {
         name: "NIST: Polyurethane Foam",
-        thermalConductivity: 0.028,
+        thermalConductivity: 0.026,
         density: 35.2,
-        costPerUnit: 150,
-        estimatedTotalCost: 18450,
-        heatFlux: 17.92,
-        totalHeatLoss: 1685,
-        efficiencyScore: 52.34
+        costPerUnit: 160,
+        estimatedTotalCost: 29760,
+        heatFlux: 6.07,
+        totalHeatLoss: 582,
+        efficiencyScore: 82.5
       },
+      topMaterialRecommendations: generateTop3MaterialRecommendations(6, 5, 3, 150, 20, -15, 'ladakh'),
       simulationResults: { predictedInsideTempNight: 12, heatLossRate: 'Low' }
     },
-    // The graph data: Notice how ambient drops below zero, but inside stays stable
     hourlyForecast: [
       { time: '00:00', ambientTemp: -12, insideTemp: 12 },
       { time: '04:00', ambientTemp: -15, insideTemp: 10 },
@@ -76,14 +285,15 @@ export const mockDatabase: Record<string, SimulationData> = {
       materials: { walls: 'Aerated Concrete + Reflective Coating', roof: 'Double Skin Ventilated Roof', wallThickness_mm: 200 },
       optimalMaterialDetails: {
         name: "NIST: Aerated Concrete",
-        thermalConductivity: 0.11,
-        density: 400,
-        costPerUnit: 120,
-        estimatedTotalCost: 34000,
-        heatFlux: 24.5,
-        totalHeatLoss: 2100,
-        efficiencyScore: 68.2
+        thermalConductivity: 0.09,
+        density: 450,
+        costPerUnit: 140,
+        estimatedTotalCost: 42340,
+        heatFlux: 11.25,
+        totalHeatLoss: 1642,
+        efficiencyScore: 79.4
       },
+      topMaterialRecommendations: generateTop3MaterialRecommendations(8, 6, 3.5, 200, 24, 20, 'thar'),
       simulationResults: { predictedInsideTempNight: 24, heatLossRate: 'High Heat Rejection' }
     },
     hourlyForecast: [
@@ -107,12 +317,13 @@ export const mockDatabase: Record<string, SimulationData> = {
         name: "NIST: Mineral Wool",
         thermalConductivity: 0.04,
         density: 120,
-        costPerUnit: 180,
-        estimatedTotalCost: 15400,
-        heatFlux: 21.0,
-        totalHeatLoss: 1850,
-        efficiencyScore: 48.9
+        costPerUnit: 110,
+        estimatedTotalCost: 15300,
+        heatFlux: 8.33,
+        totalHeatLoss: 708,
+        efficiencyScore: 66.4
       },
+      topMaterialRecommendations: generateTop3MaterialRecommendations(5, 5, 3, 120, 18, -5, 'tawang'),
       simulationResults: { predictedInsideTempNight: 15, heatLossRate: 'Moderate' }
     },
     hourlyForecast: [

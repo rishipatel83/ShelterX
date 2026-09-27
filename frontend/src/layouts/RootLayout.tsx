@@ -13,9 +13,9 @@ export default function RootLayout() {
   return (
     <div className="flex flex-col h-screen w-full bg-blue-50/30 overflow-hidden text-slate-800 font-['Space_Grotesk'] relative">
       
-      {/* Global Background Blobs */}
-      <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-400 rounded-full mix-blend-multiply filter blur-[100px] opacity-20 animate-pulse pointer-events-none z-0"></div>
-      <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-cyan-400 rounded-full mix-blend-multiply filter blur-[100px] opacity-20 animate-pulse pointer-events-none z-0" style={{ animationDelay: '1.5s' }}></div>
+      {/* Global Ambient Glow (Static cached GPU layer, zero repaint cost) */}
+      <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-300/30 rounded-full filter blur-[120px] pointer-events-none z-0 transform-gpu"></div>
+      <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-cyan-300/30 rounded-full filter blur-[120px] pointer-events-none z-0 transform-gpu"></div>
 
       {/* Global Toast Notifications (Stacked) */}
       <div className="absolute bottom-6 right-6 z-50 flex flex-col items-end space-y-3 pointer-events-none">
