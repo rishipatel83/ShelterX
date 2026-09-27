@@ -5,6 +5,9 @@
   "description": "ShelterX Backend - Modular production thermal physics, material database, simulation and cost services.",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

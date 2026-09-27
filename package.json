@@ -4,6 +4,9 @@
   "private": true,
   "description": "ShelterX Fullstack Workspace - Backend Thermal Simulation & Frontend Habitat Visualizer",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "node backend/server.js",
     "dev:backend": "npm run dev --prefix backend",

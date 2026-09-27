@@ -37,7 +37,7 @@ validateEnvironment();
 const app = express();
 app.disable('x-powered-by');
 
-if (process.env.TRUST_PROXY === '1') {
+if (process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
@@ -51,25 +51,40 @@ const defaultDevOrigins = [
 
 const configuredOrigins = (process.env.CORS_ORIGINS ?? '')
   .split(',')
-  .map((value) => value.trim())
+  .map((value) => value.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 const allowedOrigins = Array.from(new Set([...defaultDevOrigins, ...configuredOrigins]));
 
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (process.env.NODE_ENV !== 'production') return true;
+  if (allowedOrigins.includes('*')) return true;
+
+  const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+  if (allowedOrigins.includes(normalizedOrigin)) return true;
+
+  try {
+    const url = new URL(normalizedOrigin);
+    // Automatically permit Vercel deployment domains (*.vercel.app)
+    if (url.hostname.endsWith('.vercel.app')) return true;
+  } catch {
+    // Ignore URL parse errors
+  }
+  return false;
+};
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin) return callback(null, true);
-      if (process.env.NODE_ENV !== 'production') {
+      if (isOriginAllowed(origin)) {
         return callback(null, true);
       }
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error(`Origin ${origin} is not allowed by CORS.`));
+      console.warn(`[ShelterX CORS] Blocked origin: ${origin}`);
+      return callback(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
     credentials: true,
     maxAge: 600
   })
