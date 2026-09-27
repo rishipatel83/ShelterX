@@ -106,18 +106,61 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   })),
 
   setLocationPreset: (locationId) => {
-    const presets: Record<string, Partial<DraftParams>> = {
-      ladakh: { lat: 34.1526, lon: 77.5771, locationName: 'Ladakh', locationId: 'ladakh' },
-      siachen: { lat: 35.1866, lon: 77.1517, locationName: 'Siachen Glacier', locationId: 'siachen' },
-      dras: { lat: 34.4287, lon: 75.7601, locationName: 'Dras / Kargil', locationId: 'dras' },
-      leh: { lat: 34.1525, lon: 77.5770, locationName: 'Leh', locationId: 'leh' },
-      tawang: { lat: 27.5866, lon: 91.8596, locationName: 'Tawang', locationId: 'tawang' }
+    const presets: Record<string, Partial<DraftParams> & { avgTempNight: number; avgTempDay: number }> = {
+      ladakh: { lat: 34.1526, lon: 77.5771, locationName: 'Ladakh', locationId: 'ladakh', avgTempNight: -15, avgTempDay: 5 },
+      siachen: { lat: 35.1866, lon: 77.1517, locationName: 'Siachen Glacier', locationId: 'siachen', avgTempNight: -30, avgTempDay: -18 },
+      dras: { lat: 34.4287, lon: 75.7601, locationName: 'Dras / Kargil', locationId: 'dras', avgTempNight: -22, avgTempDay: -4 },
+      leh: { lat: 34.1525, lon: 77.5770, locationName: 'Leh', locationId: 'leh', avgTempNight: -12, avgTempDay: 6 },
+      tawang: { lat: 27.5866, lon: 91.8596, locationName: 'Tawang', locationId: 'tawang', avgTempNight: -2, avgTempDay: 8 },
+      thar: { lat: 26.9157, lon: 70.9083, locationName: 'Thar Desert (Jaisalmer)', locationId: 'thar', avgTempNight: 22, avgTempDay: 42 }
     };
     
-    if (presets[locationId]) {
+    const preset = presets[locationId];
+    if (preset) {
+      const draft = { ...get().draftParams, ...preset };
+      const updatedTopRecs = generateTop3MaterialRecommendations(
+        draft.length,
+        draft.width,
+        draft.height,
+        draft.wallThickness,
+        draft.targetTemp,
+        preset.avgTempNight,
+        preset.locationId,
+        preset.lat,
+        preset.lon
+      );
+
       set((state) => ({
-        draftParams: { ...state.draftParams, ...presets[locationId] }
+        draftParams: draft,
+        activeLocation: locationId,
+        data: {
+          ...state.data,
+          locationId: preset.locationId || state.data.locationId,
+          locationName: preset.locationName || state.data.locationName,
+          ambientData: {
+            ...state.data.ambientData,
+            avgTempNight: preset.avgTempNight,
+            avgTempDay: preset.avgTempDay
+          },
+          recommendedShelter: {
+            ...state.data.recommendedShelter,
+            optimalMaterialDetails: {
+              name: updatedTopRecs[0].name,
+              thermalConductivity: updatedTopRecs[0].thermalConductivity,
+              density: updatedTopRecs[0].density ?? 35.2,
+              costPerUnit: updatedTopRecs[0].costPerUnit ?? 160,
+              estimatedTotalCost: updatedTopRecs[0].estimatedTotalCost,
+              heatFlux: updatedTopRecs[0].heatFlux,
+              totalHeatLoss: updatedTopRecs[0].totalHeatLoss,
+              efficiencyScore: updatedTopRecs[0].efficiencyScore
+            },
+            topMaterialRecommendations: updatedTopRecs
+          }
+        }
       }));
+
+      // Automatically fetch live simulation for the new preset location
+      get().fetchSimulation().catch(() => {});
     }
   },
 
@@ -133,7 +176,9 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
         newThickness,
         state.draftParams.targetTemp,
         state.data.ambientData.avgTempNight,
-        state.draftParams.locationId
+        state.draftParams.locationId,
+        state.draftParams.lat,
+        state.draftParams.lon
       );
       
       return { 
@@ -233,16 +278,25 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       const geo = b.derivedGeometry ?? null;
       const result = b.result ?? {};
 
-      // Generate top 3 ranked material recommendations based on physics
-      const topRecs = generateTop3MaterialRecommendations(
-        draft.length,
-        draft.width,
-        draft.height,
-        draft.wallThickness,
-        draft.targetTemp,
-        avgTempNight,
-        draft.locationId
-      );
+      // Generate top 3 ranked material recommendations (prefer dynamic backend response, fallback to client physics engine)
+      const topRecs =
+        Array.isArray(b.recommendedShelter?.topMaterialRecommendations) &&
+        b.recommendedShelter.topMaterialRecommendations.length >= 3
+          ? b.recommendedShelter.topMaterialRecommendations
+          : Array.isArray(b.result?.recommendation?.topMaterialRecommendations) &&
+            b.result.recommendation.topMaterialRecommendations.length >= 3
+          ? b.result.recommendation.topMaterialRecommendations
+          : generateTop3MaterialRecommendations(
+              draft.length,
+              draft.width,
+              draft.height,
+              draft.wallThickness,
+              draft.targetTemp,
+              avgTempNight,
+              draft.locationId,
+              draft.lat,
+              draft.lon
+            );
 
       const transformedData: SimulationData = {
         locationId: draft.locationId,

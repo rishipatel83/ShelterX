@@ -23,7 +23,9 @@ export default function ResultsPanel() {
       materials.wallThickness_mm,
       draftParams.targetTemp,
       ambientData.avgTempNight,
-      data.locationId
+      data.locationId,
+      draftParams.lat,
+      draftParams.lon
     );
   }, [
     recommendedShelter.topMaterialRecommendations,
@@ -33,7 +35,9 @@ export default function ResultsPanel() {
     materials.wallThickness_mm,
     draftParams.targetTemp,
     ambientData.avgTempNight,
-    data.locationId
+    data.locationId,
+    draftParams.lat,
+    draftParams.lon
   ]);
 
   return (

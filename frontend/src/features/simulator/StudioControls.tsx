@@ -69,21 +69,30 @@ export default function StudioControls() {
             <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-3 block">Preset Environments</label>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'ladakh', name: 'Ladakh', subtitle: '-15°C night', icon: '🏔️' },
+                { id: 'ladakh', name: 'Ladakh', subtitle: 'Alpine Cold', icon: '🏔️' },
                 { id: 'siachen', name: 'Siachen', subtitle: 'Glacier -30°C', icon: '❄️' },
-                { id: 'dras', name: 'Dras', subtitle: 'Coldest town', icon: '🥶' },
-                { id: 'leh', name: 'Leh', subtitle: 'Alpine plateau', icon: '⛺' }
-              ].map(preset => (
-                <button
-                  key={preset.id}
-                  onClick={() => setLocationPreset(preset.id)}
-                  className="flex flex-col items-start p-3 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left min-w-[120px] shadow-sm"
-                >
-                  <span className="text-xl mb-1">{preset.icon}</span>
-                  <span className="text-sm font-bold text-slate-700">{preset.name}</span>
-                  <span className="text-[9px] text-slate-400 font-mono mt-0.5">{preset.subtitle}</span>
-                </button>
-              ))}
+                { id: 'dras', name: 'Dras', subtitle: 'Coldest Town', icon: '🥶' },
+                { id: 'leh', name: 'Leh', subtitle: 'High Plateau', icon: '⛺' },
+                { id: 'tawang', name: 'Tawang', subtitle: 'Cold & Humid', icon: '🌧️' },
+                { id: 'thar', name: 'Thar Desert', subtitle: 'Hot & Arid', icon: '☀️' },
+              ].map(preset => {
+                const isActive = draftParams.locationId === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => setLocationPreset(preset.id)}
+                    className={`flex flex-col items-start p-3 rounded-2xl border transition-all text-left min-w-[110px] shadow-sm ${
+                      isActive
+                        ? 'border-blue-500 bg-blue-50/80 ring-2 ring-blue-500/20 shadow-md'
+                        : 'border-slate-100 hover:border-blue-200 hover:bg-blue-50'
+                    }`}
+                  >
+                    <span className="text-xl mb-1">{preset.icon}</span>
+                    <span className="text-sm font-bold text-slate-700">{preset.name}</span>
+                    <span className="text-[9px] text-slate-400 font-mono mt-0.5">{preset.subtitle}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

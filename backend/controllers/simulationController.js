@@ -12,6 +12,7 @@ import {
   calculateConductionPhysics,
   calculateConductionProfile
 } from '../services/thermalPhysicsService.js';
+import { calculateDynamicMaterialRecommendations } from '../services/materialRecommendationService.js';
 
 const resolveCostThickness = (inputs) => {
   switch (inputs.costSurfaceType) {
@@ -233,56 +234,15 @@ export const runSimulation = async (req, res, next) => {
     const targetTempC = inputs.targetTemp ?? inputs.targetTempC ?? 20;
     const deltaT = Math.max(Math.abs(targetTempC - ambientNight), 1);
 
-    const topMaterialRecommendations = [
-      {
-        name: 'NIST: Polyurethane Foam (PUF) Composite',
-        recommendationType: 'Optimal Balance',
-        tagline: 'High Thermal Retention & Economical Life-Cycle Deployment',
-        badgeColor: 'emerald',
-        thermalConductivity: 0.026,
-        density: 35.2,
-        costPerUnit: 160,
-        estimatedTotalCost: Math.round(totalArea * 310),
-        heatFlux: Number(((0.026 / thicknessM) * deltaT).toFixed(1)),
-        totalHeatLoss: Math.round(((0.026 / thicknessM) * deltaT) * totalArea),
-        efficiencyScore: 82.5,
-        simulationResults: {
-          predictedInsideTempNight: Math.round(targetTempC - deltaT * 0.24)
-        }
-      },
-      {
-        name: 'Aerogel Vacuum Insulated Panel (VIP)',
-        recommendationType: 'Max Insulation',
-        tagline: 'Ultra-Low Heat Flux: Engineered for severe Himalayan sub-zero nights',
-        badgeColor: 'blue',
-        thermalConductivity: 0.016,
-        density: 140.0,
-        costPerUnit: 310,
-        estimatedTotalCost: Math.round(totalArea * 560),
-        heatFlux: Number(((0.016 / thicknessM) * deltaT).toFixed(1)),
-        totalHeatLoss: Math.round(((0.016 / thicknessM) * deltaT) * totalArea),
-        efficiencyScore: 94.8,
-        simulationResults: {
-          predictedInsideTempNight: Math.round(targetTempC - deltaT * 0.12)
-        }
-      },
-      {
-        name: 'High-Density Rockwool Core Sandwich',
-        recommendationType: 'Budget Friendly',
-        tagline: 'Cost-Effective, Non-Combustible Fast-Assembly Modular Panel',
-        badgeColor: 'amber',
-        thermalConductivity: 0.04,
-        density: 110.0,
-        costPerUnit: 95,
-        estimatedTotalCost: Math.round(totalArea * 180),
-        heatFlux: Number(((0.04 / thicknessM) * deltaT).toFixed(1)),
-        totalHeatLoss: Math.round(((0.04 / thicknessM) * deltaT) * totalArea),
-        efficiencyScore: 66.4,
-        simulationResults: {
-          predictedInsideTempNight: Math.round(targetTempC - deltaT * 0.38)
-        }
-      }
-    ];
+    const topMaterialRecommendations = calculateDynamicMaterialRecommendations({
+      location: inputs.location,
+      lat: inputs.lat,
+      lon: inputs.lon,
+      ambientNightTemp: ambientNight,
+      targetTemp: targetTempC,
+      dimensions: inputs.dimensions,
+      wallThickness_mm: inputs.wallThickness_mm
+    });
 
     const recommendation = {
       status: 'generated',
