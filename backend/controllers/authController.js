@@ -1,22 +1,10 @@
-import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
-import { createRateLimit } from '../middleware/rateLimit.js';
-
-const router = express.Router();
-
-const authLimiter = createRateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  keyPrefix: 'auth'
-});
-
-router.use(authLimiter);
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-router.post('/signup', async (req, res) => {
+export const signup = async (req, res, next) => {
   try {
     const username = String(req.body?.username ?? '').trim();
     const email = String(req.body?.email ?? '').trim().toLowerCase();
@@ -53,11 +41,16 @@ router.post('/signup', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    await User.create({ username, email, password: hashedPassword });
+    const newUser = await User.create({ username, email, password: hashedPassword });
 
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully.'
+      message: 'User registered successfully.',
+      user: {
+        id: newUser._id.toString(),
+        username: newUser.username,
+        email: newUser.email
+      }
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -66,16 +59,11 @@ router.post('/signup', async (req, res) => {
         message: 'An account with those details already exists.'
       });
     }
-
-    console.error('Signup failed:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Signup failed.'
-    });
+    next(error);
   }
-});
+};
 
-router.post('/login', async (req, res) => {
+export const login = async (req, res, next) => {
   try {
     const email = String(req.body?.email ?? '').trim().toLowerCase();
     const password = String(req.body?.password ?? '');
@@ -109,7 +97,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user._id.toString() },
+      { id: user._id.toString(), email: user.email, username: user.username },
       secret,
       { expiresIn: '1d' }
     );
@@ -124,12 +112,33 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Login failed:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Login failed.'
-    });
+    next(error);
   }
-});
+};
 
-export default router;
+export const getProfile = async (req, res, next) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    if (req.user.id === 'demo-user-id') {
+      return res.status(200).json({
+        success: true,
+        user: {
+          id: 'demo-user-id',
+          username: req.user.username || 'demo-user',
+          email: req.user.email || 'demo@shelterx.com'
+        }
+      });
+    }
+
+    const user = await User.findById(req.user.id).select('-password').lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    next(error);
+  }
+};

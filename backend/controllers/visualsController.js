@@ -1,4 +1,3 @@
-import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -6,23 +5,18 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '..');
-const visualsDir = path.resolve(projectRoot, 'visuals');
+const backendRoot = path.resolve(__dirname, '..');
+const visualsDir = path.resolve(backendRoot, 'visuals');
 const outputDir = path.resolve(visualsDir, 'output');
 const chartsPyPath = path.resolve(visualsDir, 'charts.py');
 
-// Ensure output directory exists
 if (!fs.existsSync(outputDir)) {
   fs.mkdirSync(outputDir, { recursive: true });
 }
 
-/**
- * Helper to build payload matching charts.py expected schema
- */
 const buildPayloadFromInputs = (body) => {
   const length = Number(body.dimensions?.length ?? body.length ?? 5);
   const width = Number(body.dimensions?.width ?? body.width ?? 4);
@@ -42,7 +36,7 @@ const buildPayloadFromInputs = (body) => {
 
   let outsideTemp = Number(body.outsideTempC ?? body.currentOutsideTemp);
   if (!Number.isFinite(outsideTemp)) {
-    outsideTemp = -15; // default extreme baseline
+    outsideTemp = -15;
   }
 
   const deltaT = targetTemp - outsideTemp;
@@ -80,7 +74,6 @@ const buildPayloadFromInputs = (body) => {
       };
     });
   } else {
-    // Default 6-point diurnal profile
     const defaultHourlyOutside = [
       ['00:00', outsideTemp - 5],
       ['04:00', outsideTemp - 8],
@@ -103,49 +96,81 @@ const buildPayloadFromInputs = (body) => {
     });
   }
 
+  const occupants = Number(body.occupants ?? 4);
+  const peopleHeatW = occupants * 80;
+  const infiltrationLossW = totalConductionW * 0.15;
+  const netHeatingRequiredW = Math.max(0, totalConductionW + infiltrationLossW - peopleHeatW);
+
+  const current = {
+    wallConductionW: Math.abs(wallConductionW),
+    roofConductionW: Math.abs(roofConductionW),
+    totalConductionW: wallConductionW + roofConductionW,
+    deltaTC: deltaT,
+    outsideTempC: outsideTemp,
+    targetTempC: targetTemp
+  };
+
   return {
     location,
     materialName,
     targetTempC: targetTemp,
-    current: {
-      wallConductionW,
-      roofConductionW,
-      totalConductionW,
+    current,
+    meta: {
+      generatedAt: new Date().toISOString(),
+      location,
+      materialName
+    },
+    thermal: {
+      targetTempC: targetTemp,
+      outsideTempC: outsideTemp,
       deltaTC: deltaT,
-      wallAreaM2: wallArea,
-      roofAreaM2: roofArea
+      conductionWallW: Math.abs(wallConductionW),
+      conductionRoofW: Math.abs(roofConductionW),
+      totalConductionW: Math.abs(totalConductionW),
+      infiltrationLossW: Math.abs(infiltrationLossW),
+      internalGainW: peopleHeatW,
+      netHeatingRequiredW
     },
     hourly
   };
 };
 
-/**
- * POST /api/v1/visuals/generate
- * Executes python visuals/charts.py with dynamic payload
- */
-router.post('/generate', async (req, res) => {
+export const generateVisuals = async (req, res) => {
   let tempJsonPath = null;
   try {
-    const payload = req.body?.current && req.body?.hourly
-      ? req.body
-      : buildPayloadFromInputs(req.body);
+    const payload = buildPayloadFromInputs(req.body);
 
     const tempFileName = `temp_payload_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.json`;
     tempJsonPath = path.resolve(outputDir, tempFileName);
+    fs.writeFileSync(tempJsonPath, JSON.stringify(payload, null, 2), 'utf8');
 
-    await fs.promises.writeFile(tempJsonPath, JSON.stringify(payload, null, 2), 'utf-8');
+    const pythonCommands = ['python', 'py', 'python3'];
+    let pythonExecutable = null;
 
-    // Run python charts.py with input and output paths
-    const { stdout, stderr } = await execFileAsync('python', [chartsPyPath, tempJsonPath, outputDir], {
-      timeout: 15000,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
-    });
+    for (const cmd of pythonCommands) {
+      try {
+        await execFileAsync(cmd, ['--version']);
+        pythonExecutable = cmd;
+        break;
+      } catch {
+        // Continue searching
+      }
+    }
 
-    let scriptResult = {};
-    try {
-      scriptResult = JSON.parse(stdout.trim());
-    } catch {
-      scriptResult = { rawStdout: stdout };
+    let scriptResult = 'executed';
+    if (pythonExecutable) {
+      const { stdout, stderr } = await execFileAsync(
+        pythonExecutable,
+        [chartsPyPath, tempJsonPath, outputDir],
+        { timeout: 15000 }
+      );
+      if (stderr && !stderr.includes('UserWarning') && !stderr.includes('Fontconfig')) {
+        console.warn('[ShelterX Visuals] Python stderr warning:', stderr);
+      }
+      scriptResult = stdout.trim();
+    } else {
+      console.warn('[ShelterX Visuals] Python not found on PATH. Output directory charts preserved.');
+      scriptResult = 'python-not-found-fallback';
     }
 
     const timestamp = Date.now();
@@ -174,12 +199,9 @@ router.post('/generate', async (req, res) => {
       fs.promises.unlink(tempJsonPath).catch(() => {});
     }
   }
-});
+};
 
-/**
- * GET /api/v1/visuals/heat_transfer_pie_chart.png
- */
-router.get('/heat_transfer_pie_chart.png', (req, res) => {
+export const servePieChart = (_req, res) => {
   const filePath = path.resolve(outputDir, 'heat_transfer_pie_chart.png');
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ success: false, message: 'Pie chart has not been generated yet.' });
@@ -187,12 +209,9 @@ router.get('/heat_transfer_pie_chart.png', (req, res) => {
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   return res.sendFile(filePath);
-});
+};
 
-/**
- * GET /api/v1/visuals/temperature_variation_graph.png
- */
-router.get('/temperature_variation_graph.png', (req, res) => {
+export const serveTemperatureGraph = (_req, res) => {
   const filePath = path.resolve(outputDir, 'temperature_variation_graph.png');
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ success: false, message: 'Temperature variation graph has not been generated yet.' });
@@ -200,33 +219,21 @@ router.get('/temperature_variation_graph.png', (req, res) => {
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   return res.sendFile(filePath);
-});
+};
 
-/**
- * GET /api/v1/visuals/status
- */
-router.get('/status', (_req, res) => {
-  const pieExists = fs.existsSync(path.resolve(outputDir, 'heat_transfer_pie_chart.png'));
-  const graphExists = fs.existsSync(path.resolve(outputDir, 'temperature_variation_graph.png'));
-  let pieMtime = null;
-  let graphMtime = null;
-
-  if (pieExists) {
-    pieMtime = fs.statSync(path.resolve(outputDir, 'heat_transfer_pie_chart.png')).mtime;
-  }
-  if (graphExists) {
-    graphMtime = fs.statSync(path.resolve(outputDir, 'temperature_variation_graph.png')).mtime;
-  }
+export const getVisualsStatus = (_req, res) => {
+  const piePath = path.resolve(outputDir, 'heat_transfer_pie_chart.png');
+  const graphPath = path.resolve(outputDir, 'temperature_variation_graph.png');
+  const pieExists = fs.existsSync(piePath);
+  const graphExists = fs.existsSync(graphPath);
 
   res.json({
     success: true,
     chartsScriptExists: fs.existsSync(chartsPyPath),
     pieChartExists: pieExists,
-    pieChartMtime: pieMtime,
+    pieChartMtime: pieExists ? fs.statSync(piePath).mtime : null,
     temperatureGraphExists: graphExists,
-    temperatureGraphMtime: graphMtime,
+    temperatureGraphMtime: graphExists ? fs.statSync(graphPath).mtime : null,
     outputDirectory: outputDir
   });
-});
-
-export default router;
+};

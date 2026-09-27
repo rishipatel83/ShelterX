@@ -1,25 +1,30 @@
 {
-  "name": "backend",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "shelterx-backend",
+  "version": "1.2.0",
+  "private": true,
+  "description": "ShelterX Backend - Modular production thermal physics, material database, simulation and cost services.",
+  "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "seed": "node seed.js",
-    "seed:nist": "node seed-nist.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/*.test.js",
+    "check": "node --check server.js && node --check routes/index.js && node --check routes/authroutes.js && node --check routes/simulationroutes.js && node --check routes/materialroutes.js && node --check routes/configroutes.js && node --check routes/visualsroutes.js",
+    "import:data": "node scripts/importData.js",
+    "seed": "node scripts/seed.js"
   },
-  "keywords": [],
-  "type": "module",
+  "keywords": [
+    "shelterx",
+    "thermal",
+    "simulation",
+    "ansys"
+  ],
   "dependencies": {
-    "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongodb": "^7.6.0",
     "mongoose": "^9.9.5"
   }
 }

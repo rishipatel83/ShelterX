@@ -4,27 +4,32 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const schemaPath = path.join(__dirname, '..', 'data', 'user-input-schema.json');
 
-export const getInputSchema = () =>
-  JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+const schemaPath = path.join(
+  __dirname,
+  '..',
+  'data',
+  'shelterx-user-input-schema.json'
+);
 
-const getAtPath = (obj, dottedPath) =>
-  dottedPath.split('.').reduce((acc, key) => acc?.[key], obj);
+const getSchema = () => JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
-const setAtPath = (obj, dottedPath, value) => {
-  const parts = dottedPath.split('.');
-  let cursor = obj;
-  for (let i = 0; i < parts.length - 1; i += 1) {
-    cursor[parts[i]] ??= {};
-    cursor = cursor[parts[i]];
+const getValue = (obj, dottedPath) =>
+  dottedPath.split('.').reduce((current, key) => current?.[key], obj);
+
+const setValue = (obj, dottedPath, value) => {
+  const keys = dottedPath.split('.');
+  let current = obj;
+
+  for (let i = 0; i < keys.length - 1; i += 1) {
+    current[keys[i]] ??= {};
+    current = current[keys[i]];
   }
-  cursor[parts.at(-1)] = value;
+
+  current[keys[keys.length - 1]] = value;
 };
 
-const coerce = (value, type) => {
-  if (value === undefined || value === null || value === '') return value;
-
+const convertValue = (value, type, definition) => {
   if (type === 'number') {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : value;
@@ -35,54 +40,145 @@ const coerce = (value, type) => {
     return Number.isInteger(parsed) ? parsed : value;
   }
 
-  if (type === 'string') return String(value);
+  if (type === 'string') {
+    const text = String(value);
+    return definition?.trim === false ? text : text.trim();
+  }
 
   return value;
 };
 
-const typeOk = (value, type) => {
-  if (value === undefined || value === null || value === '') return true;
+const validType = (value, type) => {
   if (type === 'string') return typeof value === 'string';
   if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
   if (type === 'integer') return Number.isInteger(value);
+  if (type === 'object') return value && typeof value === 'object' && !Array.isArray(value);
   return true;
 };
 
-export const normalizeAndValidate = (body = {}) => {
-  const schema = getInputSchema();
+const validateConstraints = (value, definition, pathName, errors) => {
+  if (typeof value === 'number') {
+    if (definition.min !== undefined && value < Number(definition.min)) {
+      errors.push(`${pathName} must be >= ${definition.min}.`);
+    }
+    if (definition.max !== undefined && value > Number(definition.max)) {
+      errors.push(`${pathName} must be <= ${definition.max}.`);
+    }
+    if (
+      definition.exclusiveMin !== undefined &&
+      value <= Number(definition.exclusiveMin)
+    ) {
+      errors.push(`${pathName} must be > ${definition.exclusiveMin}.`);
+    }
+    if (
+      definition.exclusiveMax !== undefined &&
+      value >= Number(definition.exclusiveMax)
+    ) {
+      errors.push(`${pathName} must be < ${definition.exclusiveMax}.`);
+    }
+  }
+
+  if (typeof value === 'string') {
+    if (definition.minLength !== undefined && value.length < definition.minLength) {
+      errors.push(`${pathName} is too short.`);
+    }
+    if (definition.maxLength !== undefined && value.length > definition.maxLength) {
+      errors.push(`${pathName} is too long.`);
+    }
+  }
+
+  if (Array.isArray(definition.enum) && !definition.enum.includes(value)) {
+    errors.push(`${pathName} must be one of: ${definition.enum.join(', ')}.`);
+  }
+};
+
+export const validateShelterInput = (body = {}) => {
+  const schema = getSchema();
   const normalized = {};
   const errors = [];
 
-  for (const field of schema.fields) {
-    const raw = getAtPath(body, field.path);
+  const visit = (payload, prefix = '') => {
+    for (const [key, definition] of Object.entries(payload)) {
+      const pathName = prefix ? `${prefix}.${key}` : key;
 
-    if ((raw === undefined || raw === null || raw === '') && field.required) {
-      errors.push(`${field.path} is required.`);
-      continue;
+      if (definition.type === 'object' && definition.fields) {
+        const objectValue = getValue(body, pathName);
+
+        if (
+          definition.required &&
+          (objectValue === undefined || objectValue === null)
+        ) {
+          errors.push(`${pathName} is required.`);
+          continue;
+        }
+
+        if (objectValue !== undefined && objectValue !== null && !validType(objectValue, 'object')) {
+          errors.push(`${pathName} must be object.`);
+          continue;
+        }
+
+        visit(definition.fields, pathName);
+        continue;
+      }
+
+      const rawValue = getValue(body, pathName);
+
+      if (rawValue === undefined || rawValue === null || rawValue === '') {
+        if (definition.required) {
+          errors.push(`${pathName} is required.`);
+        }
+        continue;
+      }
+
+      const converted = convertValue(rawValue, definition.type, definition);
+
+      if (!validType(converted, definition.type)) {
+        errors.push(`${pathName} must be ${definition.type}.`);
+        continue;
+      }
+
+      validateConstraints(converted, definition, pathName, errors);
+      setValue(normalized, pathName, converted);
     }
+  };
 
-    if (raw === undefined || raw === null || raw === '') {
-      continue;
-    }
+  visit(schema.payload);
 
-    const value = coerce(raw, field.type);
-
-    if (!typeOk(value, field.type)) {
-      errors.push(`${field.path} must be ${field.type}.`);
-      continue;
-    }
-
-    setAtPath(normalized, field.path, value);
-  }
-
-  // Preserve future frontend fields without forcing backend rewrites.
-  // Known fields above are normalized; unknown fields are stored under extra.
-  const knownTopLevel = new Set(schema.fields.map(f => f.path.split('.')[0]));
-  const extra = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (!knownTopLevel.has(key)) extra[key] = value;
-  }
-  if (Object.keys(extra).length) normalized.extra = extra;
-
-  return { normalized, errors, schemaVersion: schema.version };
+  return {
+    normalized,
+    errors,
+    schemaVersion: schema.version
+  };
 };
+
+export const getInputSchema = () => {
+  const schema = getSchema();
+  const fields = [];
+
+  const visit = (payload, prefix = '') => {
+    for (const [key, definition] of Object.entries(payload)) {
+      const pathName = prefix ? `${prefix}.${key}` : key;
+      if (definition.type === 'object' && definition.fields) {
+        visit(definition.fields, pathName);
+      } else {
+        fields.push({
+          path: pathName,
+          type: definition.type,
+          required: Boolean(definition.required)
+        });
+      }
+    }
+  };
+
+  if (schema.payload) {
+    visit(schema.payload);
+  }
+
+  return {
+    version: schema.version || '1.1.0',
+    description: schema.description || 'ShelterX user input schema contract',
+    endpoint: schema.endpoint || '/api/v1/sih/simulate',
+    fields
+  };
+};
+

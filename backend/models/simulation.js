@@ -2,14 +2,60 @@ import mongoose from 'mongoose';
 
 const simulationSchema = new mongoose.Schema(
   {
-    requestId: { type: String, required: true, index: true },
-    userId: { type: String, default: null },
-    inputs: { type: mongoose.Schema.Types.Mixed, required: true },
-    derivedGeometry: { type: mongoose.Schema.Types.Mixed, default: null },
-    weather: { type: mongoose.Schema.Types.Mixed, default: null },
-    result: { type: mongoose.Schema.Types.Mixed, default: null }
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true
+    },
+    schemaVersion: {
+      type: String,
+      default: null
+    },
+    status: {
+      type: String,
+      default: null,
+      index: true
+    },
+    inputs: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true
+    },
+    material: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+    weather: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+    thermalResult: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+    costResult: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+    recommendation: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+
+    // Legacy fields retained for compatibility with older stored documents.
+    ansysResult: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+    modelPrediction: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    }
   },
-  { timestamps: true, strict: false }
+  {
+    timestamps: true,
+    strict: true
+  }
 );
 
 export default mongoose.model('Simulation', simulationSchema);

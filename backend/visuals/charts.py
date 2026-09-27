@@ -112,12 +112,14 @@ def render_heat_loss_pie(payload, output_path):
     """Draws a premium donut chart showing wall vs roof heat transfer share."""
     apply_report_style()
 
-    current = payload.get("current", {})
-    wall_w = abs(current.get("wallConductionW", 0))
-    roof_w = abs(current.get("roofConductionW", 0))
+    current = payload.get("current") or payload.get("thermal") or {}
+    wall_w = abs(current.get("wallConductionW") or current.get("conductionWallW") or 0.0)
+    roof_w = abs(current.get("roofConductionW") or current.get("conductionRoofW") or 0.0)
     total_w = wall_w + roof_w
     if total_w <= 0:
-        total_w = 1.0
+        wall_w = 1.0
+        roof_w = 1.0
+        total_w = 2.0
 
     is_heating = current.get("totalConductionW", 0) >= 0
     mode_text = "HEAT LOSS TO OUTSIDE" if is_heating else "HEAT GAIN FROM AMBIENT"

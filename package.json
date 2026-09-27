@@ -1,16 +1,19 @@
 {
-  "name": "shelterx-backend",
-  "version": "1.1.0",
+  "name": "shelterx-workspace",
+  "version": "1.2.0",
   "private": true,
-  "description": "ShelterX production backend - validated conduction physics, materials, weather and cost services.",
-  "main": "server.js",
+  "description": "ShelterX Fullstack Workspace - Backend Thermal Simulation & Frontend Habitat Visualizer",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test",
-    "check": "node --check server.js && node --check routes/authroutes.js && node --check routes/simulationroutes.js && node --check services/inputService.js && node --check services/materialService.js && node --check services/weatherService.js && node --check services/thermalPhysicsService.js && node --check services/costService.js && node --check services/optimizerService.js && node --check services/pricingService.js",
-    "import:data": "node scripts/importData.js"
+    "start": "node backend/server.js",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "node --watch backend/server.js",
+    "test": "npm test --prefix backend",
+    "check": "npm run check --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "import:data": "npm run import:data --prefix backend",
+    "seed": "npm run seed --prefix backend"
   },
   "keywords": [
     "shelterx",

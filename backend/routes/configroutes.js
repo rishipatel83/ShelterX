@@ -1,10 +1,10 @@
 import express from 'express';
-import { getInputSchema } from '../services/inputService.js';
+import { getUserInputSchema, getHealth, getReady } from '../controllers/configController.js';
 
 const router = express.Router();
 
-router.get('/user-inputs', (_req, res) => {
-  res.json({ success: true, data: getInputSchema() });
-});
+router.get('/user-inputs', getUserInputSchema);
+router.get('/health', getHealth);
+router.get('/ready', getReady);
 
 export default router;

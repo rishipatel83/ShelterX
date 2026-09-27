@@ -183,9 +183,10 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
         orientation: draft.orientation,
         roofMaterial: draft.roof,
         wallThickness_mm: draft.wallThickness,
+        insulationThickness_mm: draft.insulationThickness_mm ?? draft.wallThickness,
+        materialCode: draft.materialId || 'PUF_SANDWICH_01',
       };
       // Attach optional schema fields only when defined
-      if (draft.insulationThickness_mm !== undefined) payload.insulationThickness_mm = draft.insulationThickness_mm;
       if (draft.occupants !== undefined) payload.occupants = draft.occupants;
       if (draft.budgetINR !== undefined) payload.budgetINR = draft.budgetINR;
       if (draft.materialSelectionMode) payload.materialSelectionMode = draft.materialSelectionMode;
@@ -332,18 +333,30 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
 
       get().removeToast(toastId);
 
-      if (err.response?.status === 403 || err.response?.status === 401) {
+      const status = err.response?.status;
+      const message = err.response?.data?.message || err.message;
+
+      if (status === 403 || status === 401) {
         set({ error: 'Authentication Required', isLoading: false, isConnected: false });
         get().addToast('Authentication Required: Please Sign In to execute simulations.', 'error');
-      } else {
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
         set({
-          error: err.response?.data?.message || 'Failed to reach ShelterX backend',
+          error: 'ShelterX backend unreachable',
           isLoading: false,
           isConnected: false,
           activeLocation: draft.locationId,
           data: fallbackData,
         });
         get().addToast('Backend unreachable — showing cached reference data.', 'error');
+      } else {
+        set({
+          error: message || 'Failed to complete simulation',
+          isLoading: false,
+          isConnected: true,
+          activeLocation: draft.locationId,
+          data: fallbackData,
+        });
+        get().addToast(message || 'Simulation warning: showing reference data.', 'error');
       }
     }
   }

@@ -1,17 +1,15 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  Sliders,
-  Thermometer,
-  Layers,
   Sparkles,
   RefreshCw,
   Download,
-  ChevronDown,
-  ChevronUp,
   Maximize2,
+  AlertCircle,
+  MapPin,
+  Thermometer,
+  Layers,
   Box,
-  Zap,
-  AlertCircle
+  ShieldCheck
 } from 'lucide-react';
 import { useSimulationStore } from '@/store/useSimulationStore';
 import { calculateDynamicConduction, buildChartsPyPayload } from '@/utils/thermalPhysics';
@@ -20,47 +18,52 @@ import api from '@/services/api';
 type ViewMode = 'dual' | 'pie' | 'diurnal';
 
 export default function VisualsPanel() {
-  const { draftParams, setDraftParam, updateWallThickness, data } = useSimulationStore();
+  const { draftParams, data } = useSimulationStore();
   const { recommendedShelter, ambientData, hourlyForecast, locationName } = data;
 
   const [viewMode, setViewMode] = useState<ViewMode>('dual');
-  const [showTuningDeck, setShowTuningDeck] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
   const [error, setError] = useState<string | null>(null);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
-  const [selectedMaterialPreset, setSelectedMaterialPreset] = useState<string>('puf');
 
-  // Derive outside ambient temperature baseline
+  // Outside ambient temperature baseline directly derived from user's location & weather
   const outsideTempC = useMemo(() => {
-    if (data.backendMeta?.averageTemperatureC != null) {
-      return Number(data.backendMeta.averageTemperatureC);
+    if ((data as any).backendMeta?.averageTemperatureC != null) {
+      return Number((data as any).backendMeta.averageTemperatureC);
+    }
+    if ((ambientData as any)?.currentTempC != null) {
+      return Number((ambientData as any).currentTempC);
     }
     if (hourlyForecast && hourlyForecast.length > 0) {
       return Math.min(...hourlyForecast.map((h) => h.ambientTemp));
     }
     return ambientData?.avgTempNight ?? -15;
-  }, [data.backendMeta?.averageTemperatureC, hourlyForecast, ambientData]);
+  }, [data, ambientData, hourlyForecast]);
 
-  // Active thermal conductivity (k)
-  const k = useMemo(() => {
-    if (selectedMaterialPreset === 'aerogel') return 0.016;
-    if (selectedMaterialPreset === 'rockwool') return 0.040;
-    if (selectedMaterialPreset === 'pcm') return 0.032;
-    return recommendedShelter?.optimalMaterialDetails?.thermalConductivity ?? 0.026;
-  }, [selectedMaterialPreset, recommendedShelter]);
+  // Thermal conductivity (k) linked directly to the shelter's selected or optimal material
+  const activeMaterial = useMemo(() => {
+    const optimal = recommendedShelter?.optimalMaterialDetails;
+    if (optimal?.thermalConductivity) {
+      return {
+        name: optimal.name,
+        k: optimal.thermalConductivity
+      };
+    }
+    const roofName = draftParams.roof || 'PUF Insulated Panels';
+    return {
+      name: roofName,
+      k: 0.024
+    };
+  }, [recommendedShelter, draftParams.roof]);
 
-  // Live computed thermal physics
+  // Live computed thermal physics linked directly to user's initial values
   const thermalResult = useMemo(() => {
     const roofThicknessMm: number =
       (recommendedShelter?.materials as any)?.insulationThickness_mm ??
       draftParams.insulationThickness_mm ??
+      draftParams.wallThickness ??
       130;
-
-    let materialLabel = 'PUF Composite (k = 0.026 W/m·K)';
-    if (selectedMaterialPreset === 'aerogel') materialLabel = 'Aerogel VIP (k = 0.016 W/m·K)';
-    if (selectedMaterialPreset === 'rockwool') materialLabel = 'Rockwool Sandwich (k = 0.040 W/m·K)';
-    if (selectedMaterialPreset === 'pcm') materialLabel = 'PCM Composite (k = 0.032 W/m·K)';
 
     return calculateDynamicConduction({
       length: draftParams.length,
@@ -70,8 +73,8 @@ export default function VisualsPanel() {
       roofThicknessMm,
       targetTempC: draftParams.targetTemp,
       outsideTempC,
-      thermalConductivityWmK: k,
-      materialName: materialLabel,
+      thermalConductivityWmK: activeMaterial.k,
+      materialName: activeMaterial.name,
       locationName: locationName || draftParams.locationName,
       hourlyForecast,
     });
@@ -82,12 +85,11 @@ export default function VisualsPanel() {
     draftParams.wallThickness,
     draftParams.insulationThickness_mm,
     draftParams.targetTemp,
-    outsideTempC,
-    k,
-    selectedMaterialPreset,
-    hourlyForecast,
-    locationName,
     draftParams.locationName,
+    locationName,
+    outsideTempC,
+    activeMaterial,
+    hourlyForecast,
     recommendedShelter,
   ]);
 
@@ -96,7 +98,7 @@ export default function VisualsPanel() {
   const pieChartUrl = `${baseUrl}/visuals/heat_transfer_pie_chart.png?t=${cacheBuster}`;
   const graphUrl = `${baseUrl}/visuals/temperature_variation_graph.png?t=${cacheBuster}`;
 
-  // Execute visuals/charts.py in backend with current values
+  // Execute visuals/charts.py in backend with current user-defined parameters
   const handleGenerateCharts = async () => {
     setIsGenerating(true);
     setError(null);
@@ -106,20 +108,38 @@ export default function VisualsPanel() {
       if (res.data?.success) {
         setCacheBuster(Date.now());
       } else {
-        setError(res.data?.message || 'Server chart render warning.');
+        setError(res.data?.message || 'Server chart render note.');
       }
     } catch (err: any) {
-      console.warn('[ShelterX Charts] Execution note:', err);
+      console.warn('[ShelterX Charts] Render notice:', err);
       setError(err?.response?.data?.message || err?.message || 'Generated via local server fallback.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Generate on initial load
+  // Automatically update the charts when the user's primary inputs change (debounced)
+  const debounceTimer = useRef<any>(null);
   useEffect(() => {
-    handleGenerateCharts();
-  }, []);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      handleGenerateCharts();
+    }, 600);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [
+    draftParams.length,
+    draftParams.width,
+    draftParams.height,
+    draftParams.wallThickness,
+    draftParams.targetTemp,
+    draftParams.locationName,
+    outsideTempC,
+    activeMaterial.k,
+    activeMaterial.name
+  ]);
 
   return (
     <div className="w-full space-y-6">
@@ -132,35 +152,26 @@ export default function VisualsPanel() {
               Matplotlib 3.10 Engine · visuals/charts.py
             </span>
             <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-              200 DPI Vector Output
+              Linked to User Inputs
             </span>
           </div>
           <h3 className="text-2xl font-bold text-slate-800 tracking-tight">
             Thermal Analysis & Chart Studio
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Adjust the habitat parameters below to recalculate real-time conduction and re-render Python charts dynamically.
+            Charts are automatically rendered from your shelter dimensions, comfort target, and environment specified above.
           </p>
         </div>
 
-        {/* Action Controls */}
+        {/* Refresh Action */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => setShowTuningDeck(!showTuningDeck)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition-all cursor-pointer"
-          >
-            <Sliders className="w-3.5 h-3.5 text-slate-500" />
-            <span>{showTuningDeck ? 'Hide Control Deck' : 'Tune Parameters'}</span>
-            {showTuningDeck ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-
           <button
             onClick={handleGenerateCharts}
             disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
-            <span>{isGenerating ? 'Rendering...' : 'Update Charts'}</span>
+            <span>{isGenerating ? 'Rendering...' : 'Refresh Charts'}</span>
           </button>
         </div>
       </div>
@@ -172,154 +183,44 @@ export default function VisualsPanel() {
         </div>
       )}
 
-      {/* Interactive Parameter Control Deck */}
-      {showTuningDeck && (
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-slate-700/80 animate-fade-in-up">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-5 border-b border-slate-700/60 mb-6">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                <Sliders className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white tracking-tight">Interactive Parameter Tuning Deck</h4>
-                <p className="text-[11px] text-slate-400 font-mono">Tweak sliders to immediately recalculate thermal physics and regenerate charts</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">Active Target:</span>
-              <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30">
-                {draftParams.targetTemp}°C
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono ml-2">Wall:</span>
-              <span className="px-2.5 py-0.5 rounded-lg bg-blue-500/20 text-blue-300 font-mono font-bold text-xs border border-blue-500/30">
-                {draftParams.wallThickness}mm
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Target Temperature Slider */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <label className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <Thermometer className="w-3.5 h-3.5 text-emerald-400" /> Inside Target Temp
-                </label>
-                <span className="font-mono font-bold text-emerald-400">{draftParams.targetTemp}°C</span>
-              </div>
-              <input
-                type="range"
-                min="12"
-                max="28"
-                step="0.5"
-                value={draftParams.targetTemp}
-                onChange={(e) => setDraftParam('targetTemp', parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-              />
-              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                <span>12°C (Arctic min)</span>
-                <span>20°C (Standard)</span>
-                <span>28°C (Warm)</span>
-              </div>
-            </div>
-
-            {/* Wall Thickness Slider */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <label className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-blue-400" /> Wall Thickness
-                </label>
-                <span className="font-mono font-bold text-blue-400">{draftParams.wallThickness} mm</span>
-              </div>
-              <input
-                type="range"
-                min="60"
-                max="300"
-                step="10"
-                value={draftParams.wallThickness}
-                onChange={(e) => updateWallThickness(parseInt(e.target.value, 10))}
-                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
-              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                <span>80mm</span>
-                <span>150mm (Standard)</span>
-                <span>300mm (Ultra)</span>
-              </div>
-            </div>
-
-            {/* Habitat Dimensions (L x W) */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <label className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <Box className="w-3.5 h-3.5 text-amber-400" /> Footprint (L × W)
-                </label>
-                <span className="font-mono font-bold text-amber-400">
-                  {draftParams.length}m × {draftParams.width}m
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-700">
-                  <span className="text-[10px] text-slate-400">L:</span>
-                  <input
-                    type="number"
-                    min="3"
-                    max="15"
-                    step="0.5"
-                    value={draftParams.length}
-                    onChange={(e) => setDraftParam('length', parseFloat(e.target.value) || 5)}
-                    className="w-full bg-transparent text-xs font-mono font-bold text-white focus:outline-hidden"
-                  />
-                  <span className="text-[10px] text-slate-400">m</span>
-                </div>
-                <div className="flex items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-700">
-                  <span className="text-[10px] text-slate-400">W:</span>
-                  <input
-                    type="number"
-                    min="2"
-                    max="10"
-                    step="0.5"
-                    value={draftParams.width}
-                    onChange={(e) => setDraftParam('width', parseFloat(e.target.value) || 4)}
-                    className="w-full bg-transparent text-xs font-mono font-bold text-white focus:outline-hidden"
-                  />
-                  <span className="text-[10px] text-slate-400">m</span>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 font-mono text-right">
-                Floor Area: {(draftParams.length * draftParams.width).toFixed(1)} m²
-              </p>
-            </div>
-
-            {/* Insulation Material Quick Presets */}
-            <div className="space-y-2">
-              <label className="text-slate-300 font-medium text-xs flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-violet-400" /> Insulation Preset
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { id: 'puf', label: 'PUF', sub: 'k=0.026' },
-                  { id: 'aerogel', label: 'Aerogel VIP', sub: 'k=0.016' },
-                  { id: 'rockwool', label: 'Rockwool', sub: 'k=0.040' },
-                  { id: 'pcm', label: 'PCM', sub: 'k=0.032' },
-                ].map((preset) => (
-                  <button
-                    key={preset.id}
-                    onClick={() => setSelectedMaterialPreset(preset.id)}
-                    className={`px-2 py-1.5 rounded-lg text-left transition-all border ${
-                      selectedMaterialPreset === preset.id
-                        ? 'bg-blue-600/30 border-blue-400 text-white'
-                        : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <p className="text-[11px] font-bold leading-tight">{preset.label}</p>
-                    <p className="text-[9px] font-mono opacity-80">{preset.sub}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+      {/* Active User Input Linked Summary Bar */}
+      <div className="bg-slate-900 rounded-2xl p-4 text-white shadow-md border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 font-medium">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span className="text-slate-300">Active Inputs Linked to Visuals:</span>
         </div>
-      )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Location */}
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono">
+            <MapPin className="w-3 h-3 text-blue-400" />
+            {draftParams.locationName || locationName || 'Ladakh'}
+          </span>
+
+          {/* Footprint */}
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono">
+            <Box className="w-3 h-3 text-amber-400" />
+            {draftParams.length}m × {draftParams.width}m × {draftParams.height}m
+          </span>
+
+          {/* Wall Thickness */}
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono">
+            <Layers className="w-3 h-3 text-indigo-400" />
+            {draftParams.wallThickness}mm Wall
+          </span>
+
+          {/* Target Comfort */}
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono">
+            <Thermometer className="w-3 h-3 text-emerald-400" />
+            Target: {draftParams.targetTemp}°C
+          </span>
+
+          {/* Outside Ambient */}
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono">
+            Ambient: {outsideTempC}°C
+          </span>
+        </div>
+      </div>
 
       {/* Live Physics Telemetry Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -403,7 +304,7 @@ export default function VisualsPanel() {
 
         <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Output: visuals/output/*.png</span>
+          <span>charts.py · 200 DPI Vector Output</span>
         </div>
       </div>
 
@@ -436,7 +337,7 @@ export default function VisualsPanel() {
                 className="w-full h-full object-contain p-2 group-hover:scale-102 transition-transform duration-300"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
-                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12">Click "Update Charts" to generate</text></svg>';
+                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12">Click "Refresh Charts" to render</text></svg>';
                 }}
               />
               <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 backdrop-blur-xs">
@@ -482,7 +383,7 @@ export default function VisualsPanel() {
                 className="w-full h-full object-contain p-2 group-hover:scale-102 transition-transform duration-300"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
-                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12">Click "Update Charts" to generate</text></svg>';
+                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12">Click "Refresh Charts" to render</text></svg>';
                 }}
               />
               <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 backdrop-blur-xs">

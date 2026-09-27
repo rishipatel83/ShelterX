@@ -37,12 +37,25 @@ export default function AuthPage() {
         }
       }
     } catch (err: any) {
-      console.log('Auth API failed, falling back to demo mode', err);
-      // Fallback for hackathon demo so it's not blocked
-      localStorage.setItem('token', 'demo-token');
-      setUser(isLogin ? email.split('@')[0] : username);
-      addToast('Backend unreachable: Logged in using Local Fallback Mode', 'info');
-      navigate('/dashboard');
+      console.log('Auth API error:', err);
+      const serverMessage = err.response?.data?.message;
+
+      if (err.response?.status === 401) {
+        addToast(serverMessage || 'Invalid email or password. Please check your credentials or switch to Sign Up.', 'error');
+      } else if (err.response?.status === 409) {
+        addToast(serverMessage || 'An account with those details already exists. Please log in.', 'error');
+        setIsLogin(true);
+      } else if (err.response?.status === 400) {
+        addToast(serverMessage || 'Please verify that all fields meet the requirements.', 'error');
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        // Fallback for demo when backend server process is not active
+        localStorage.setItem('token', 'demo-token');
+        setUser(isLogin ? email.split('@')[0] : username);
+        addToast('Backend unreachable: Logged in using Local Fallback Mode', 'info');
+        navigate('/dashboard');
+      } else {
+        addToast(serverMessage || 'Authentication service error. Please try again.', 'error');
+      }
     } finally {
       setLoading(false);
     }
