@@ -1,0 +1,67 @@
+{
+  "location": "Ladakh (High Altitude Cold)",
+  "materialName": "NIST: Polyurethane Foam",
+  "targetTempC": 20,
+  "current": {
+    "wallConductionW": 423.36,
+    "roofConductionW": 193.8461538461538,
+    "totalConductionW": 617.2061538461538,
+    "deltaTC": 35,
+    "outsideTempC": -15,
+    "targetTempC": 20
+  },
+  "meta": {
+    "generatedAt": "2026-09-30T15:57:21.720Z",
+    "location": "Ladakh (High Altitude Cold)",
+    "materialName": "NIST: Polyurethane Foam"
+  },
+  "thermal": {
+    "targetTempC": 20,
+    "outsideTempC": -15,
+    "deltaTC": 35,
+    "conductionWallW": 423.36,
+    "conductionRoofW": 193.8461538461538,
+    "totalConductionW": 617.2061538461538,
+    "infiltrationLossW": 92.58092307692307,
+    "internalGainW": 320,
+    "netHeatingRequiredW": 389.78707692307694
+  },
+  "hourly": [
+    {
+      "time": "00:00",
+      "outsideTempC": -12,
+      "heatingLoadW": 532,
+      "coolingLoadW": 0
+    },
+    {
+      "time": "04:00",
+      "outsideTempC": -15,
+      "heatingLoadW": 582,
+      "coolingLoadW": 0
+    },
+    {
+      "time": "08:00",
+      "outsideTempC": -5,
+      "heatingLoadW": 416,
+      "coolingLoadW": 0
+    },
+    {
+      "time": "12:00",
+      "outsideTempC": 5,
+      "heatingLoadW": 250,
+      "coolingLoadW": 0
+    },
+    {
+      "time": "16:00",
+      "outsideTempC": 2,
+      "heatingLoadW": 300,
+      "coolingLoadW": 0
+    },
+    {
+      "time": "20:00",
+      "outsideTempC": -8,
+      "heatingLoadW": 466,
+      "coolingLoadW": 0
+    }
+  ]
+}
