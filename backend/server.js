@@ -66,8 +66,8 @@ const isOriginAllowed = (origin) => {
 
   try {
     const url = new URL(normalizedOrigin);
-    // Automatically permit Vercel deployment domains (*.vercel.app)
-    if (url.hostname.endsWith('.vercel.app')) return true;
+    // Automatically permit Vercel and Render deployment domains
+    if (url.hostname.endsWith('.vercel.app') || url.hostname.endsWith('.onrender.com')) return true;
   } catch {
     // Ignore URL parse errors
   }
