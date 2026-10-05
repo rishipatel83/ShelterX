@@ -108,6 +108,25 @@ app.use(
   })
 );
 
+// Root and health probes for cloud hosting (Render / Railway / GCP)
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    service: 'ShelterX Backend',
+    status: 'ok',
+    message: 'Backend is active and healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'ok',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Global health and ready probes
 app.get('/api/v1/health', (_req, res) => {
   res.json({
@@ -142,9 +161,9 @@ const PORT = Number(process.env.PORT || 5000);
 
 await connectDB({ required: false });
 
-const server = app.listen(PORT, () => {
-  console.log(`[ShelterX] Backend active on http://localhost:${PORT}`);
-  console.log(`[ShelterX] API ready at http://localhost:${PORT}/api/v1`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[ShelterX] Backend active on port ${PORT}`);
+  console.log(`[ShelterX] API ready at http://0.0.0.0:${PORT}/api/v1`);
 });
 
 const shutdown = async (signal) => {
