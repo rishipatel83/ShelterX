@@ -116,6 +116,29 @@ export const login = async (req, res, next) => {
   }
 };
 
+export const demoLogin = async (_req, res, next) => {
+  try {
+    const secret = process.env.JWT_SECRET || 'shelterx-dev-secret-key-32chars-minimum-security';
+    const demoPayload = {
+      id: 'demo-user-id',
+      username: 'drdo-commander',
+      email: 'officer@drdo.gov.in',
+      role: 'Chief Simulation Officer'
+    };
+
+    const token = jwt.sign(demoPayload, secret, { expiresIn: '7d' });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Demo credentials authenticated.',
+      token,
+      user: demoPayload
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getProfile = async (req, res, next) => {
   try {
     if (!req.user?.id) {
@@ -127,8 +150,9 @@ export const getProfile = async (req, res, next) => {
         success: true,
         user: {
           id: 'demo-user-id',
-          username: req.user.username || 'demo-user',
-          email: req.user.email || 'demo@shelterx.com'
+          username: req.user.username || 'drdo-commander',
+          email: req.user.email || 'officer@drdo.gov.in',
+          role: 'Chief Simulation Officer'
         }
       });
     }
@@ -142,3 +166,4 @@ export const getProfile = async (req, res, next) => {
     next(error);
   }
 };
+

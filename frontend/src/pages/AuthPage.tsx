@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/services/api';
-import { ShieldAlert, ArrowRight } from 'lucide-react';
+import { ShieldAlert, ArrowRight, Zap, Sparkles } from 'lucide-react';
 import { useSimulationStore } from '@/store/useSimulationStore';
 
 export default function AuthPage() {
@@ -14,6 +14,40 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  const handleDemoLogin = async () => {
+    setDemoLoading(true);
+    try {
+      const response = await api.post('/auth/demo');
+      if (response.data && response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        setUser(response.data.user?.username || 'DRDO Commander');
+        addToast('Welcome Commander! Logged in via 1-Click Demo Access.', 'success');
+        navigate('/dashboard');
+        return;
+      }
+    } catch (err: any) {
+      console.log('Backend demo login API unavailable, applying client demo credentials', err);
+    } finally {
+      setDemoLoading(false);
+    }
+
+    // Instant zero-wait fallback for cold starts or network latency
+    localStorage.setItem('token', 'demo-token');
+    setUser('DRDO Commander');
+    addToast('Logged in via Instant Demo Access (Officer Mode)', 'success');
+    navigate('/dashboard');
+  };
+
+  const handleFillDemoCredentials = () => {
+    setEmail('officer@drdo.gov.in');
+    setPassword('DRDO#Officer2026');
+    if (!isLogin) {
+      setUsername('drdo_commander');
+    }
+    addToast('Demo operator credentials pre-filled!', 'info');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,18 +154,48 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-wide py-4 rounded-xl transition-all shadow-[0_4px_20px_rgba(37,99,235,0.3)] mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-wide py-4 rounded-xl transition-all shadow-[0_4px_20px_rgba(37,99,235,0.3)] mt-6 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? 'Authenticating...' : isLogin ? 'Sign In' : 'Register Account'}
             <ArrowRight className="w-4 h-4 ml-2" />
           </button>
         </form>
 
-        <p className="mt-8 text-center text-xs font-medium text-slate-500">
+        {/* 1-Click Demo Access Section */}
+        <div className="mt-6 pt-5 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-2.5 px-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Fast-Track Testing
+            </span>
+            <button
+              type="button"
+              onClick={handleFillDemoCredentials}
+              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+            >
+              Pre-fill Details
+            </button>
+          </div>
+          
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            disabled={demoLoading || loading}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-slate-800 hover:to-slate-700 text-amber-300 font-bold text-sm py-3.5 px-4 rounded-xl shadow-lg border border-slate-700/80 transition-all active:scale-[0.99] disabled:opacity-70 cursor-pointer group"
+          >
+            <Zap className="w-4 h-4 text-amber-400 fill-amber-400 group-hover:scale-110 transition-transform" />
+            <span>{demoLoading ? 'Authenticating Officer...' : '1-Click Demo Access (DRDO Officer)'}</span>
+          </button>
+          <p className="text-[10px] text-center text-slate-400 mt-2 font-medium">
+            Instantly launches simulation studio with pre-authorized cadre clearance.
+          </p>
+        </div>
+
+        <p className="mt-6 text-center text-xs font-medium text-slate-500">
           {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
           <button 
             onClick={() => { setIsLogin(!isLogin); setEmail(''); setPassword(''); setUsername(''); }} 
-            className="text-blue-600 hover:text-blue-700 font-bold ml-1 transition-colors underline decoration-blue-200 underline-offset-4"
+            className="text-blue-600 hover:text-blue-700 font-bold ml-1 transition-colors underline decoration-blue-200 underline-offset-4 cursor-pointer"
           >
             {isLogin ? 'Request Access' : 'Sign In'}
           </button>

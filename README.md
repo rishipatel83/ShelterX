@@ -1,7 +1,8 @@
 # ShelterX 🏔️ | DRDO Extreme Climate Habitat Defense Engine
 
 > **Live Deployment:** [https://shelterx-drdo.vercel.app](https://shelterx-drdo.vercel.app)  
-> *Production-grade thermal physics simulation, 3D interactive habitat design, and material cost optimization for high-altitude defense frontiers.*
+> *Production-grade thermal physics simulation, 3D interactive habitat design, and material cost optimization for high-altitude defense frontiers.*  
+> ⚡ **Quick Evaluation:** Includes **1-Click Demo Access** (`officer@drdo.gov.in`) on the login screen for instant reviewer access without manual registration.
 
 [![Live App](https://img.shields.io/badge/Live%20Demo-shelterx--drdo.vercel.app-2563eb?style=for-the-badge&logo=vercel&logoColor=white)](https://shelterx-drdo.vercel.app)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
@@ -62,8 +63,9 @@ The platform bridges thermodynamic structural engineering with interactive 3D co
 - Visualized with **Recharts**.
 - Heating requirements graphed across 24-hour diurnal outdoor temperature sweeps.
 
-### 7. 🔐 Military Operator Access & Persistence
-- Secure role-based operator authentication using **JWT** and salted **bcryptjs** hashing.
+### 7. 🔐 Military Operator Access & 1-Click Demo Evaluation
+- **1-Click Demo Access**: Fast-track button (`officer@drdo.gov.in`) designed for evaluators and judges to instantly test the 3D studio and physics engine without mandatory signup.
+- **Secure Role-Based Persistence**: Secure tokenized access using **JWT** and salted **bcryptjs** hashing.
 - Saves custom simulation configurations and historical runs to **MongoDB Atlas**.
 
 ---
