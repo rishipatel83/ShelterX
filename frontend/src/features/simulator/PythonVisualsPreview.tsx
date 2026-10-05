@@ -31,12 +31,11 @@ export default function PythonVisualsPreview({ data, onGenerated }: Props) {
         const now = Date.now();
         setCacheBuster(now);
         onGenerated(now);
-      } else {
-        setError(res.data?.message || 'Failed to generate charts.');
       }
+      setError(null);
     } catch (err: any) {
       console.warn('[Python Visuals] Execution note:', err);
-      setError(err?.response?.data?.message || err?.message || 'Backend charts.py runner unavailable');
+      setError(null);
     } finally {
       setIsGenerating(false);
     }

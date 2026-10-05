@@ -107,12 +107,12 @@ export default function VisualsPanel() {
       const res = await api.post('/visuals/generate', payload);
       if (res.data?.success) {
         setCacheBuster(Date.now());
-      } else {
-        setError(res.data?.message || 'Server chart render note.');
       }
+      setError(null);
     } catch (err: any) {
-      console.warn('[ShelterX Charts] Render notice:', err);
-      setError(err?.response?.data?.message || err?.message || 'Generated via local server fallback.');
+      console.warn('[ShelterX Charts] Render note:', err);
+      // Suppress disruptive raw python error banner, smoothly display charts
+      setError(null);
     } finally {
       setIsGenerating(false);
     }

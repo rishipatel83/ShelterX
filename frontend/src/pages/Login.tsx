@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
-import { ShieldAlert, Zap } from 'lucide-react';
+import { ShieldAlert, KeyRound } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -117,21 +117,29 @@ export default function Login() {
           </button>
         </form>
 
-        {/* 1-Click Demo Login Action */}
-        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-700/60">
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={demoLoading || loading}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-slate-800 hover:to-slate-700 text-amber-300 font-bold text-sm py-3 px-4 rounded-xl border border-slate-700 shadow-md transition-all active:scale-[0.99] disabled:opacity-70 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-            <span>{demoLoading ? 'Logging into Demo...' : '1-Click Demo Access (DRDO Officer)'}</span>
-          </button>
-          <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mt-2">
-            Instant evaluation bypass without registration
-          </p>
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100 dark:border-slate-700" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-white dark:bg-slate-800 px-3 text-slate-400 font-medium">or continue with</span>
+          </div>
         </div>
+
+        {/* Cohesive Demo User Button */}
+        <button
+          type="button"
+          onClick={handleDemoLogin}
+          disabled={demoLoading || loading}
+          className="w-full flex items-center justify-center gap-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300 font-semibold text-sm py-3 px-4 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors shadow-sm cursor-pointer disabled:opacity-60"
+        >
+          <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <span>{demoLoading ? 'Signing in...' : 'Continue as Guest Operator'}</span>
+        </button>
+        <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mt-2">
+          Instant preview — no signup required
+        </p>
 
         <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
           Don't have an operator account?{' '}

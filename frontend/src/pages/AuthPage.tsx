@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/services/api';
-import { ShieldAlert, ArrowRight, Zap, Sparkles } from 'lucide-react';
+import { ShieldAlert, ArrowRight, KeyRound } from 'lucide-react';
 import { useSimulationStore } from '@/store/useSimulationStore';
 
 export default function AuthPage() {
@@ -22,8 +22,8 @@ export default function AuthPage() {
       const response = await api.post('/auth/demo');
       if (response.data && response.data.token) {
         localStorage.setItem('token', response.data.token);
-        setUser(response.data.user?.username || 'DRDO Commander');
-        addToast('Welcome Commander! Logged in via 1-Click Demo Access.', 'success');
+        setUser(response.data.user?.username || 'Guest Operator');
+        addToast('Signed in with demo account.', 'success');
         navigate('/dashboard');
         return;
       }
@@ -35,8 +35,8 @@ export default function AuthPage() {
 
     // Instant zero-wait fallback for cold starts or network latency
     localStorage.setItem('token', 'demo-token');
-    setUser('DRDO Commander');
-    addToast('Logged in via Instant Demo Access (Officer Mode)', 'success');
+    setUser('Guest Operator');
+    addToast('Signed in with demo account.', 'success');
     navigate('/dashboard');
   };
 
@@ -161,34 +161,35 @@ export default function AuthPage() {
           </button>
         </form>
 
-        {/* 1-Click Demo Access Section */}
-        <div className="mt-6 pt-5 border-t border-slate-100">
-          <div className="flex items-center justify-between mb-2.5 px-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Fast-Track Testing
-            </span>
-            <button
-              type="button"
-              onClick={handleFillDemoCredentials}
-              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
-            >
-              Pre-fill Details
-            </button>
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100" />
           </div>
-          
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-white/90 px-3 text-slate-400 font-medium">or continue with</span>
+          </div>
+        </div>
+
+        {/* Humanized, Cohesive Demo Access Button */}
+        <button
+          type="button"
+          onClick={handleDemoLogin}
+          disabled={demoLoading || loading}
+          className="w-full flex items-center justify-center gap-2.5 bg-blue-50/80 hover:bg-blue-100/90 text-blue-700 font-semibold text-sm py-3.5 px-4 rounded-xl border border-blue-200/80 hover:border-blue-300 transition-all active:scale-[0.99] disabled:opacity-60 cursor-pointer shadow-sm"
+        >
+          <KeyRound className="w-4 h-4 text-blue-600" />
+          <span>{demoLoading ? 'Signing in...' : 'Continue as Guest Operator'}</span>
+        </button>
+        <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2.5 px-1">
+          <span>Instant preview — no signup required</span>
           <button
             type="button"
-            onClick={handleDemoLogin}
-            disabled={demoLoading || loading}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-slate-800 hover:to-slate-700 text-amber-300 font-bold text-sm py-3.5 px-4 rounded-xl shadow-lg border border-slate-700/80 transition-all active:scale-[0.99] disabled:opacity-70 cursor-pointer group"
+            onClick={handleFillDemoCredentials}
+            className="text-blue-600 hover:text-blue-800 font-medium transition-colors cursor-pointer"
           >
-            <Zap className="w-4 h-4 text-amber-400 fill-amber-400 group-hover:scale-110 transition-transform" />
-            <span>{demoLoading ? 'Authenticating Officer...' : '1-Click Demo Access (DRDO Officer)'}</span>
+            Pre-fill fields
           </button>
-          <p className="text-[10px] text-center text-slate-400 mt-2 font-medium">
-            Instantly launches simulation studio with pre-authorized cadre clearance.
-          </p>
         </div>
 
         <p className="mt-6 text-center text-xs font-medium text-slate-500">
